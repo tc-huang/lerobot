@@ -1,0 +1,15 @@
+{
+    "name": "LeRobot Development Container CPU",
+    "build": {
+        "dockerfile": "../docker/lerobot-cpu/Dockerfile",
+        "context": ".."
+    },
+    "settings": {
+        "terminal.integrated.shell.linux": "/bin/bash"
+    },
+    "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance"
+    ],
+    "remoteUser": "root"
+}
