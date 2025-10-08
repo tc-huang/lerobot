@@ -14,11 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
 import pytest
 import torch
 
-from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.datasets.preprocess_dataset import delete_episodes, downsample_dataset, resize_dataset
 
 
@@ -87,8 +85,6 @@ def test_resize_dataset(tmp_path, lerobot_dataset_factory):
     # Get original image shape
     camera_keys = original_dataset.meta.camera_keys
     assert len(camera_keys) > 0, "Dataset should have camera keys for this test"
-
-    original_shape = original_dataset.meta.features[camera_keys[0]]["shape"]
 
     # Resize to (64, 64)
     new_size = (64, 64)

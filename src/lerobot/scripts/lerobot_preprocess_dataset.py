@@ -50,7 +50,6 @@ python src/lerobot/scripts/lerobot_preprocess_dataset.py \
 
 import argparse
 import logging
-from pathlib import Path
 
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.datasets.preprocess_dataset import delete_episodes, downsample_dataset, resize_dataset

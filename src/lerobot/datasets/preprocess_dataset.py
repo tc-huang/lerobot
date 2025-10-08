@@ -25,7 +25,7 @@ import logging
 from pathlib import Path
 
 import torch
-import torchvision.transforms.functional as F
+import torchvision.transforms.functional as TF  # noqa: N812
 from tqdm import tqdm
 
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
@@ -58,14 +58,10 @@ def downsample_dataset(
     original_fps = original_dataset.fps
 
     if target_fps > original_fps:
-        raise ValueError(
-            f"target_fps ({target_fps}) cannot be greater than original fps ({original_fps})"
-        )
+        raise ValueError(f"target_fps ({target_fps}) cannot be greater than original fps ({original_fps})")
 
     if original_fps % target_fps != 0:
-        raise ValueError(
-            f"target_fps ({target_fps}) must be a divisor of original fps ({original_fps})"
-        )
+        raise ValueError(f"target_fps ({target_fps}) must be a divisor of original fps ({original_fps})")
 
     skip_factor = original_fps // target_fps
     logging.info(f"Downsampling from {original_fps} fps to {target_fps} fps (skip factor: {skip_factor})")
@@ -102,10 +98,13 @@ def downsample_dataset(
             for key, value in frame.items():
                 if key in ("task_index", "timestamp", "episode_index", "frame_index", "index", "task"):
                     continue
-                if key in (DONE, REWARD):
-                    if isinstance(value, torch.Tensor) and value.ndim == 0:
-                        value = value.unsqueeze(0)
-                if key.startswith("complementary_info") and isinstance(value, torch.Tensor) and value.ndim == 0:
+                if key in (DONE, REWARD) and isinstance(value, torch.Tensor) and value.ndim == 0:
+                    value = value.unsqueeze(0)
+                if (
+                    key.startswith("complementary_info")
+                    and isinstance(value, torch.Tensor)
+                    and value.ndim == 0
+                ):
                     value = value.unsqueeze(0)
                 new_frame[key] = value
 
@@ -192,13 +191,12 @@ def resize_dataset(
         for key, value in frame.items():
             if key in ("task_index", "timestamp", "episode_index", "frame_index", "index", "task"):
                 continue
-            if key in (DONE, REWARD):
-                if isinstance(value, torch.Tensor) and value.ndim == 0:
-                    value = value.unsqueeze(0)
+            if key in (DONE, REWARD) and isinstance(value, torch.Tensor) and value.ndim == 0:
+                value = value.unsqueeze(0)
 
             # Resize if it's one of the specified image keys
             if key in image_keys:
-                resized = F.resize(value, resize_size)
+                resized = TF.resize(value, resize_size)
                 value = resized.clamp(0, 1)
 
             if key.startswith("complementary_info") and isinstance(value, torch.Tensor) and value.ndim == 0:
@@ -283,9 +281,8 @@ def delete_episodes(
         for key, value in frame.items():
             if key in ("task_index", "timestamp", "episode_index", "frame_index", "index", "task"):
                 continue
-            if key in (DONE, REWARD):
-                if isinstance(value, torch.Tensor) and value.ndim == 0:
-                    value = value.unsqueeze(0)
+            if key in (DONE, REWARD) and isinstance(value, torch.Tensor) and value.ndim == 0:
+                value = value.unsqueeze(0)
             if key.startswith("complementary_info") and isinstance(value, torch.Tensor) and value.ndim == 0:
                 value = value.unsqueeze(0)
             new_frame[key] = value
