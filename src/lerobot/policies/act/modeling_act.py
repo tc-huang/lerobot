@@ -455,19 +455,27 @@ class ACT(nn.Module):
             )
 
         # Prepare transformer encoder inputs.
-        encoder_in_tokens = [self.encoder_latent_input_proj(latent_sample)]
-        encoder_in_pos_embed = list(self.encoder_1d_feature_pos_embed.weight.unsqueeze(1))
+        # Use tensor concatenation instead of list operations for torch.compile compatibility
+        encoder_in_tokens = self.encoder_latent_input_proj(latent_sample).unsqueeze(0)  # (1, B, D)
+        # Get all 1D positional embeddings and expand batch dimension
+        encoder_in_pos_embed = self.encoder_1d_feature_pos_embed.weight.unsqueeze(1)  # (n_1d_tokens, 1, D)
+        
         # Robot state token.
         if self.config.robot_state_feature:
-            encoder_in_tokens.append(self.encoder_robot_state_input_proj(batch[OBS_STATE]))
+            robot_state_token = self.encoder_robot_state_input_proj(batch[OBS_STATE]).unsqueeze(0)  # (1, B, D)
+            encoder_in_tokens = torch.cat([encoder_in_tokens, robot_state_token], dim=0)
         # Environment state token.
         if self.config.env_state_feature:
-            encoder_in_tokens.append(self.encoder_env_state_input_proj(batch[OBS_ENV_STATE]))
+            env_state_token = self.encoder_env_state_input_proj(batch[OBS_ENV_STATE]).unsqueeze(0)  # (1, B, D)
+            encoder_in_tokens = torch.cat([encoder_in_tokens, env_state_token], dim=0)
 
         if self.config.image_features:
             # For a list of images, the H and W may vary but H*W is constant.
             # NOTE: If modifying this section, verify on MPS devices that
             # gradients remain stable (no explosions or NaNs).
+            # Process all images and concatenate their features
+            cam_tokens_list = []
+            cam_pos_embed_list = []
             for img in batch[OBS_IMAGES]:
                 cam_features = self.backbone(img)["feature_map"]
                 cam_pos_embed = self.encoder_cam_feat_pos_embed(cam_features).to(dtype=cam_features.dtype)
@@ -477,14 +485,16 @@ class ACT(nn.Module):
                 cam_features = einops.rearrange(cam_features, "b c h w -> (h w) b c")
                 cam_pos_embed = einops.rearrange(cam_pos_embed, "b c h w -> (h w) b c")
 
-                # Extend immediately instead of accumulating and concatenating
-                # Convert to list to extend properly
-                encoder_in_tokens.extend(list(cam_features))
-                encoder_in_pos_embed.extend(list(cam_pos_embed))
-
-        # Stack all tokens along the sequence dimension.
-        encoder_in_tokens = torch.stack(encoder_in_tokens, axis=0)
-        encoder_in_pos_embed = torch.stack(encoder_in_pos_embed, axis=0)
+                # Collect features as tensors
+                cam_tokens_list.append(cam_features)
+                cam_pos_embed_list.append(cam_pos_embed)
+            
+            # Concatenate all camera features along sequence dimension
+            if cam_tokens_list:
+                cam_tokens = torch.cat(cam_tokens_list, dim=0)  # (seq_cam, B, D)
+                cam_pos_embeds = torch.cat(cam_pos_embed_list, dim=0)  # (seq_cam, B, D)
+                encoder_in_tokens = torch.cat([encoder_in_tokens, cam_tokens], dim=0)
+                encoder_in_pos_embed = torch.cat([encoder_in_pos_embed, cam_pos_embeds], dim=0)
 
         # Forward pass through the transformer modules.
         encoder_out = self.encoder(encoder_in_tokens, pos_embed=encoder_in_pos_embed)
