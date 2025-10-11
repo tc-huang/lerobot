@@ -1,0 +1,18 @@
+--- benchmark_inference_compile_lerobot.py	2025-10-11 01:28:07.669921834 +0000
++++ benchmark_inference_compile_lerobot_origin.py	2025-10-11 01:27:16.715519858 +0000
+@@ -11,7 +11,6 @@
+
+ import argparse
+ import json
+-from pickle import TRUE
+ import time
+ from typing import Any, Callable, Dict, List, Tuple
+
+@@ -445,7 +444,7 @@
+             import torch._dynamo
+
+             torch._dynamo.config.verbose = True
+-            torch._dynamo.config.suppress_errors = TRUE
++            torch._dynamo.config.suppress_errors = False
+
+             policy_compiled = torch.compile(policy, mode="default")
