@@ -106,6 +106,28 @@ class TorchCompileBenchmark:
         torch.manual_seed(42)
         np.random.seed(42)
 
+        # Configure PyTorch for better numerical stability and consistency
+        # between compiled and non-compiled code
+        
+        # Set float32 matmul precision to highest for better numerical stability
+        # This disables TF32 tensor cores which can introduce numerical differences
+        torch.set_float32_matmul_precision("highest")
+        
+        # Disable TF32 for CUDA operations to ensure consistent results
+        # TF32 uses lower precision that can cause differences between
+        # compiled and non-compiled versions
+        if torch.cuda.is_available():
+            torch.backends.cuda.matmul.allow_tf32 = False
+            torch.backends.cudnn.allow_tf32 = False
+
+        # Enable deterministic algorithms for reproducibility where possible
+        # warn_only=True allows non-deterministic ops that don't have deterministic alternatives
+        try:
+            torch.use_deterministic_algorithms(True, warn_only=True)
+        except Exception:
+            # Some PyTorch versions may not support warn_only parameter
+            pass
+
         # Load dataset metadata
         ds_meta = LeRobotDatasetMetadata(self.repo_id)
 
