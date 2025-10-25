@@ -81,7 +81,30 @@ POLICY_CONFIGS: dict[str, PolicyConfig] = {
 
 
 class TorchCompileBenchmark:
-    """Safe torch.compile benchmark for LeRobot policies"""
+    """Safe torch.compile benchmark for LeRobot policies
+    
+    This benchmark tests torch.compile compatibility with LeRobot policies by:
+    1. Compiling the policy with torch.compile(mode="default")
+    2. Verifying numerical consistency between compiled and non-compiled versions
+    3. Measuring performance improvements from compilation
+    
+    Note on Numerical Consistency:
+        torch.compile can introduce small numerical differences due to:
+        - TF32 tensor cores on CUDA devices (Ampere GPUs or newer)
+        - Different SDPA (Scaled Dot-Product Attention) backend selection
+        - Floating-point operation reordering in fused kernels
+        
+        This benchmark configures PyTorch to ensure consistency by:
+        - Disabling TF32 via torch.set_float32_matmul_precision("highest")
+        - Explicitly setting CUDA precision modes to IEEE standards
+        - Enabling deterministic algorithms where possible
+        
+        Performance Note:
+        Disabling TF32 may reduce performance on Ampere+ GPUs by 10-20%, but
+        ensures numerical reproducibility. This is the right trade-off for
+        validating torch.compile correctness. In production, you may re-enable
+        TF32 after validation if the small numerical differences are acceptable.
+    """
 
     def __init__(self, policy_name: str, device: str, repo_id: str = "AdilZtn/grab_red_cube_test_25"):
         self.policy_name = policy_name
