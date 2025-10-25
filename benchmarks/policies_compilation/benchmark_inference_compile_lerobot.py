@@ -108,17 +108,24 @@ class TorchCompileBenchmark:
 
         # Configure PyTorch for better numerical stability and consistency
         # between compiled and non-compiled code
-        
+
         # Set float32 matmul precision to highest for better numerical stability
         # This disables TF32 tensor cores which can introduce numerical differences
         torch.set_float32_matmul_precision("highest")
-        
+
         # Disable TF32 for CUDA operations to ensure consistent results
         # TF32 uses lower precision that can cause differences between
         # compiled and non-compiled versions
         if torch.cuda.is_available():
-            torch.backends.cuda.matmul.allow_tf32 = False
-            torch.backends.cudnn.allow_tf32 = False
+            # Use new API for PyTorch 2.9+ with fallback to old API
+            try:
+                # New API (PyTorch 2.9+)
+                torch.backends.cuda.matmul.fp32_precision = "ieee"
+                torch.backends.cudnn.conv.fp32_precision = "ieee"
+            except (AttributeError, RuntimeError):
+                # Fallback to old API (PyTorch < 2.9)
+                torch.backends.cuda.matmul.allow_tf32 = False
+                torch.backends.cudnn.allow_tf32 = False
 
         # Enable deterministic algorithms for reproducibility where possible
         # warn_only=True allows non-deterministic ops that don't have deterministic alternatives
