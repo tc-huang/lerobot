@@ -82,7 +82,30 @@ POLICY_CONFIGS: dict[str, PolicyConfig] = {
 
 
 class TorchCompileBenchmark:
-    """Safe torch.compile benchmark for LeRobot policies"""
+    """Safe torch.compile benchmark for LeRobot policies
+    
+    This benchmark tests torch.compile compatibility with LeRobot policies by:
+    1. Compiling the policy with torch.compile(mode="default")
+    2. Verifying numerical consistency between compiled and non-compiled versions
+    3. Measuring performance improvements from compilation
+    
+    Note on Numerical Consistency:
+        torch.compile can introduce small numerical differences due to:
+        - TF32 tensor cores on CUDA devices (Ampere GPUs or newer)
+        - Different SDPA (Scaled Dot-Product Attention) backend selection
+        - Floating-point operation reordering in fused kernels
+        
+        This benchmark configures PyTorch to ensure consistency by:
+        - Disabling TF32 via torch.set_float32_matmul_precision("highest")
+        - Explicitly setting CUDA precision modes to IEEE standards
+        - Enabling deterministic algorithms where possible
+        
+        Performance Note:
+        Disabling TF32 may reduce performance on Ampere+ GPUs by 10-20%, but
+        ensures numerical reproducibility. This is the right trade-off for
+        validating torch.compile correctness. In production, you may re-enable
+        TF32 after validation if the small numerical differences are acceptable.
+    """
 
     def __init__(self, policy_name: str, device: str, repo_id: str = "AdilZtn/grab_red_cube_test_25"):
         self.policy_name = policy_name
@@ -109,6 +132,35 @@ class TorchCompileBenchmark:
         """Setup policy, data, and processors"""
         torch.manual_seed(42)
         np.random.seed(42)
+
+        # Configure PyTorch for better numerical stability and consistency
+        # between compiled and non-compiled code
+
+        # Set float32 matmul precision to highest for better numerical stability
+        # This disables TF32 tensor cores which can introduce numerical differences
+        torch.set_float32_matmul_precision("highest")
+
+        # Disable TF32 for CUDA operations to ensure consistent results
+        # TF32 uses lower precision that can cause differences between
+        # compiled and non-compiled versions
+        if torch.cuda.is_available():
+            # Use new API for PyTorch 2.9+ with fallback to old API
+            try:
+                # New API (PyTorch 2.9+)
+                torch.backends.cuda.matmul.fp32_precision = "ieee"
+                torch.backends.cudnn.conv.fp32_precision = "ieee"
+            except (AttributeError, RuntimeError):
+                # Fallback to old API (PyTorch < 2.9)
+                torch.backends.cuda.matmul.allow_tf32 = False
+                torch.backends.cudnn.allow_tf32 = False
+
+        # Enable deterministic algorithms for reproducibility where possible
+        # warn_only=True allows non-deterministic ops that don't have deterministic alternatives
+        try:
+            torch.use_deterministic_algorithms(True, warn_only=True)
+        except Exception:
+            # Some PyTorch versions may not support warn_only parameter
+            pass
 
         # Load dataset metadata
         ds_meta = LeRobotDatasetMetadata(self.repo_id)
