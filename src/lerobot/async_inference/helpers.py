@@ -12,14 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import io
 import logging
 import logging.handlers
 import os
 import time
+import zlib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import torch
 
 from lerobot.configs.types import PolicyFeature
@@ -42,6 +45,51 @@ Action = torch.Tensor
 
 # observation as received from the robot (can be numpy arrays, floats, etc.)
 RawObservation = dict[str, Any]
+
+
+@dataclass
+class CompressedImage:
+    """Losslessly compressed image for efficient network transmission.
+
+    The numpy array is serialised with ``np.save`` and then compressed with
+    zlib, preserving dtype, shape and channel order exactly. This avoids the
+    colour-space ambiguity of JPEG while still reducing typical robot camera
+    frames by 3-8x depending on scene complexity.
+    """
+
+    data: bytes  # zlib-compressed bytes produced by np.save
+
+
+def compress_observation_images(raw_obs: RawObservation, level: int = 1) -> RawObservation:
+    """Return a copy of *raw_obs* with every 3-D numpy image array replaced by
+    a :class:`CompressedImage`.
+
+    Args:
+        raw_obs: Raw observation dict as returned by ``robot.get_observation()``.
+        level: zlib compression level (1 = fastest, 9 = best ratio). Defaults
+            to 1 so that the Jetson CPU is not the bottleneck.
+    """
+    compressed = dict(raw_obs)
+    for key, value in raw_obs.items():
+        if isinstance(value, np.ndarray) and value.ndim == 3:
+            buf = io.BytesIO()
+            np.save(buf, value)
+            compressed[key] = CompressedImage(data=zlib.compress(buf.getvalue(), level=level))
+    return compressed
+
+
+def decompress_observation_images(raw_obs: RawObservation) -> RawObservation:
+    """Return a copy of *raw_obs* with every :class:`CompressedImage` replaced
+    by the original numpy array.
+
+    This is a no-op for observations that were not compressed.
+    """
+    decompressed = dict(raw_obs)
+    for key, value in raw_obs.items():
+        if isinstance(value, CompressedImage):
+            buf = io.BytesIO(zlib.decompress(value.data))
+            decompressed[key] = np.load(buf)
+    return decompressed
 
 # observation as those recorded in LeRobot dataset (keys are different)
 LeRobotObservation = dict[str, torch.Tensor]

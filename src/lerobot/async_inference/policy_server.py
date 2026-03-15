@@ -57,6 +57,7 @@ from .helpers import (
     RemotePolicyConfig,
     TimedAction,
     TimedObservation,
+    decompress_observation_images,
     get_logger,
     observations_similar,
     raw_observation_to_observation,
@@ -341,8 +342,9 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
         """
         """1. Prepare observation"""
         start_prepare = time.perf_counter()
+        raw_obs = decompress_observation_images(observation_t.get_observation())
         observation: Observation = raw_observation_to_observation(
-            observation_t.get_observation(),
+            raw_obs,
             self.lerobot_features,
             self.policy_image_features,
         )
@@ -363,22 +365,15 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
         )
 
         """4. Apply postprocessor"""
-        # Apply postprocessor (handles unnormalization and device movement)
-        # Postprocessor expects (B, action_dim) per action, but we have (B, chunk_size, action_dim)
-        # So we process each action in the chunk individually
+        # Apply postprocessor (handles unnormalization and device movement).
+        # Unnormalization is elementwise over action_dim, so we can reshape
+        # (B, chunk_size, action_dim) -> (B*chunk_size, action_dim) and postprocess
+        # in a single batched pass instead of looping chunk_size times.
         start_postprocess = time.perf_counter()
-        _, chunk_size, _ = action_tensor.shape
+        B, chunk_size, action_dim = action_tensor.shape
 
-        # Process each action in the chunk
-        processed_actions = []
-        for i in range(chunk_size):
-            # Extract action at timestep i: (B, action_dim)
-            single_action = action_tensor[:, i, :]
-            processed_action = self.postprocessor(single_action)
-            processed_actions.append(processed_action)
-
-        # Stack back to (B, chunk_size, action_dim), then remove batch dim
-        action_tensor = torch.stack(processed_actions, dim=1).squeeze(0)
+        action_tensor = self.postprocessor(action_tensor.view(B * chunk_size, action_dim))
+        action_tensor = action_tensor.view(B, chunk_size, action_dim).squeeze(0)
         self.logger.debug(f"Postprocessed action shape: {action_tensor.shape}")
 
         action_tensor = action_tensor.detach().cpu()

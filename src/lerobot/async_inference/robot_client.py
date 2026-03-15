@@ -74,6 +74,7 @@ from .helpers import (
     RemotePolicyConfig,
     TimedAction,
     TimedObservation,
+    compress_observation_images,
     get_logger,
     map_robot_keys_to_lerobot_features,
     visualize_action_queue_size,
@@ -193,7 +194,16 @@ class RobotClient:
             raise ValueError("Input observation needs to be a TimedObservation!")
 
         start_time = time.perf_counter()
-        observation_bytes = pickle.dumps(obs)
+        obs_to_send = obs
+        if self.config.image_compression:
+            compressed_raw_obs = compress_observation_images(obs.get_observation())
+            obs_to_send = TimedObservation(
+                timestamp=obs.timestamp,
+                timestep=obs.timestep,
+                observation=compressed_raw_obs,
+                must_go=obs.must_go,
+            )
+        observation_bytes = pickle.dumps(obs_to_send)
         serialize_time = time.perf_counter() - start_time
         self.logger.debug(f"Observation serialization time: {serialize_time:.6f}s")
 
