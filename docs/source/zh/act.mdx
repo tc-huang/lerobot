@@ -1,6 +1,6 @@
 # ACT (Action Chunking with Transformers)
 
-ACT is a **lightweight and efficient policy for imitation learning**, especially well-suited for fine-grained manipulation tasks. It's the **first model we recommend when you're starting out** with LeRobot due to its fast training time, low computational requirements, and strong performance.
+ACT 是一種**輕量且高效的模仿學習策略**，特別適合精細操作任務。由於其訓練速度快、計算需求低且表現優異，它是**我們推薦您入門 LeRobot 時首選的模型**。
 
 <div class="video-container">
   <iframe
@@ -14,44 +14,44 @@ ACT is a **lightweight and efficient policy for imitation learning**, especially
   ></iframe>
 </div>
 
-_Watch this tutorial from the LeRobot team to learn how ACT works: [LeRobot ACT Tutorial](https://www.youtube.com/watch?v=ft73x0LfGpM)_
+_觀看 LeRobot 團隊的教學影片，了解 ACT 的運作方式：[LeRobot ACT 教學](https://www.youtube.com/watch?v=ft73x0LfGpM)_
 
-## Model Overview
+## 模型概覽
 
-Action Chunking with Transformers (ACT) was introduced in the paper [Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware](https://arxiv.org/abs/2304.13705) by Zhao et al. The policy was designed to enable precise, contact-rich manipulation tasks using affordable hardware and minimal demonstration data.
+Action Chunking with Transformers（ACT）由 Zhao 等人在論文 [Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware](https://arxiv.org/abs/2304.13705) 中提出。該策略旨在使用平價硬體和最少的示範資料來實現精確且充分接觸（contact-rich）的操作任務。
 
-### Why ACT is Great for Beginners
+### 為什麼 ACT 非常適合初學者
 
-ACT stands out as an excellent starting point for several reasons:
+ACT 作為絕佳的入門選擇，有以下幾個原因：
 
-- **Fast Training**: Trains in a few hours on a single GPU
-- **Lightweight**: Only ~80M parameters, making it efficient and easy to work with
-- **Data Efficient**: Often achieves high success rates with just 50 demonstrations
+- **訓練速度快**：在單張 GPU 上幾小時內即可完成訓練
+- **輕量化**：僅約 8,000 萬個參數，高效且易於使用
+- **資料效率高**：通常僅需 50 筆示範即可達到高成功率
 
-### Architecture
+### 架構
 
-ACT uses a transformer-based architecture with three main components:
+ACT 使用基於 Transformer 的架構，包含三個主要組件：
 
-1. **Vision Backbone**: ResNet-18 processes images from multiple camera viewpoints
-2. **Transformer Encoder**: Synthesizes information from camera features, joint positions, and a learned latent variable
-3. **Transformer Decoder**: Generates coherent action sequences using cross-attention
+1. **視覺骨幹網路**：ResNet-18 處理來自多個攝影機視角的影像
+2. **Transformer 編碼器**：整合來自攝影機特徵、關節位置和學習到的潛在變數的資訊
+3. **Transformer 解碼器**：使用交叉注意力機制（cross-attention）生成連貫的動作序列
 
-The policy takes as input:
+策略的輸入包括：
 
-- Multiple RGB images (e.g., from wrist cameras, front/top cameras)
-- Current robot joint positions
-- A latent style variable `z` (learned during training, set to zero during inference)
+- 多張 RGB 影像（例如來自手腕攝影機、前方/頂部攝影機）
+- 當前機器人關節位置
+- 潛在風格變數 `z`（訓練期間學習，推論時設為零）
 
-And outputs a chunk of `k` future action sequences.
+輸出為一個包含 `k` 個未來動作序列的區塊。
 
-## Installation Requirements
+## 安裝需求
 
-1. Install LeRobot by following our [Installation Guide](./installation).
-2. ACT is included in the base LeRobot installation, so no additional dependencies are needed!
+1. 按照我們的[安裝指南](./installation)安裝 LeRobot。
+2. ACT 已包含在 LeRobot 的基礎安裝中，無需額外的依賴項！
 
-## Training ACT
+## 訓練 ACT
 
-ACT works seamlessly with the standard LeRobot training pipeline. Here's a complete example for training ACT on your dataset:
+ACT 可與標準的 LeRobot 訓練流程無縫整合。以下是在您的資料集上訓練 ACT 的完整範例：
 
 ```bash
 lerobot-train \
@@ -64,19 +64,19 @@ lerobot-train \
   --policy.repo_id=${HF_USER}/act_policy
 ```
 
-### Training Tips
+### 訓練技巧
 
-1. **Start with defaults**: ACT's default hyperparameters work well for most tasks
-2. **Training duration**: Expect a few hours for 100k training steps on a single GPU
-3. **Batch size**: Start with batch size 8 and adjust based on your GPU memory
+1. **從預設值開始**：ACT 的預設超參數對大多數任務都能良好運作
+2. **訓練時長**：在單張 GPU 上進行 100k 訓練步驟預計需要幾小時
+3. **批次大小**：建議從批次大小 8 開始，再根據您的 GPU 記憶體進行調整
 
-### Train using Google Colab
+### 使用 Google Colab 訓練
 
-If your local computer doesn't have a powerful GPU, you can utilize Google Colab to train your model by following the [ACT training notebook](./notebooks#training-act).
+如果您的本機電腦沒有強大的 GPU，可以按照 [ACT 訓練筆記本](./notebooks#training-act) 使用 Google Colab 來訓練您的模型。
 
-## Evaluating ACT
+## 評估 ACT
 
-Once training is complete, you can evaluate your ACT policy using the `lerobot-record` command with your trained policy. This will run inference and record evaluation episodes:
+訓練完成後，您可以使用 `lerobot-record` 指令搭配已訓練的策略來評估您的 ACT 策略。這將執行推論並記錄評估回合：
 
 ```bash
 lerobot-record \
