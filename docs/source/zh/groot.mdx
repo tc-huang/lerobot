@@ -1,16 +1,16 @@
-# GR00T N1.5 Policy
+# GR00T N1.5 策略
 
-GR00T N1.5 is an open foundation model from NVIDIA designed for generalized humanoid robot reasoning and skills. It is a cross-embodiment model that accepts multimodal input, including language and images, to perform manipulation tasks in diverse environments.
+GR00T N1.5 是 NVIDIA 設計的開放基礎模型（foundation model），專為通用人形機器人推理與技能而打造。它是一個跨具身模型（cross-embodiment model），接受多模態輸入（包括語言和影像），以在多樣化的環境中執行操作任務。
 
-This document outlines the specifics of its integration and usage within the LeRobot framework.
+本文件概述了其在 LeRobot 框架中的整合與使用細節。
 
-## Model Overview
+## 模型概述
 
-NVIDIA Isaac GR00T N1.5 is an upgraded version of the GR00T N1 foundation model. It is built to improve generalization and language-following abilities for humanoid robots.
+NVIDIA Isaac GR00T N1.5 是 GR00T N1 基礎模型的升級版本。它旨在提升人形機器人的泛化能力與語言理解遵循能力。
 
-Developers and researchers can post-train GR00T N1.5 with their own real or synthetic data to adapt it for specific humanoid robots or tasks.
+開發者和研究人員可以使用自己的真實或合成資料對 GR00T N1.5 進行後訓練，以適應特定的人形機器人或任務。
 
-GR00T N1.5 (specifically the GR00T-N1.5-3B model) is built using pre-trained vision and language encoders. It utilizes a flow matching action transformer to model a chunk of actions, conditioned on vision, language, and proprioception.
+GR00T N1.5（具體來說是 GR00T-N1.5-3B 模型）使用預訓練的視覺和語言編碼器建構而成。它利用 flow matching action transformer 來對動作塊（chunk of actions）建模，並以視覺、語言和本體感覺作為條件。
 
 <img
   src="https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/lerobot/lerobot-groot-paper1%20(1).png"
@@ -18,53 +18,53 @@ GR00T N1.5 (specifically the GR00T-N1.5-3B model) is built using pre-trained vis
   width="80%"
 />
 
-Its strong performance comes from being trained on an expansive and diverse humanoid dataset, which includes:
+其優異的效能來自於在大規模且多樣化的人形機器人資料集上進行訓練，這些資料集包括：
 
-- Real captured data from robots.
-- Synthetic data generated using NVIDIA Isaac GR00T Blueprint.
-- Internet-scale video data.
+- 從機器人擷取的真實資料。
+- 使用 NVIDIA Isaac GR00T Blueprint 生成的合成資料。
+- 網際網路規模的影片資料。
 
-This approach allows the model to be highly adaptable through post-training for specific embodiments, tasks, and environments.
+這種方法使模型透過後訓練能夠高度適應特定的具身類型、任務和環境。
 
-## Installation Requirements
+## 安裝需求
 
-As of today, GR00T N1.5 requires flash attention for it's internal working.
+截至目前，GR00T N1.5 的內部運作需要 Flash Attention。
 
-We are working on making this optional, but in the meantime that means that we require an extra installation step and it can only be used in CUDA enabled devices.
+我們正在努力將此設為可選項，但目前這意味著需要額外的安裝步驟，且只能在啟用 CUDA 的裝置上使用。
 
-1. Following the Environment Setup of our [Installation Guide](./installation). **Attention** don't install `lerobot` in this step.
-2. Install [Flash Attention](https://github.com/Dao-AILab/flash-attention) by running:
+1. 按照我們[安裝指南](./installation)中的環境設定進行操作。**注意**：在此步驟中不要安裝 `lerobot`。
+2. 執行以下命令安裝 [Flash Attention](https://github.com/Dao-AILab/flash-attention)：
 
 ```bash
-# Check https://pytorch.org/get-started/locally/ for your system
+# 請查看 https://pytorch.org/get-started/locally/ 以取得適合您系統的版本
 pip install "torch>=2.2.1,<2.8.0" "torchvision>=0.21.0,<0.23.0" # --index-url https://download.pytorch.org/whl/cu1XX
-pip install ninja "packaging>=24.2,<26.0" # flash attention dependencies
+pip install ninja "packaging>=24.2,<26.0" # flash attention 依賴項
 pip install "flash-attn>=2.5.9,<3.0.0" --no-build-isolation
 python -c "import flash_attn; print(f'Flash Attention {flash_attn.__version__} imported successfully')"
 ```
 
-3. Install LeRobot by running:
+3. 執行以下命令安裝 LeRobot：
 
 ```bash
 pip install lerobot[groot]
 ```
 
-## Usage
+## 使用方式
 
-To use GR00T in your LeRobot configuration, specify the policy type as:
+若要在 LeRobot 設定中使用 GR00T，請將策略類型指定為：
 
 ```python
 policy.type=groot
 ```
 
-## Training
+## 訓練
 
-### Training Command Example
+### 訓練指令範例
 
-Here's a complete training command for finetuning the base GR00T model on your own dataset:
+以下是在您自己的資料集上微調基礎 GR00T 模型的完整訓練指令：
 
 ```bash
-# Using a multi-GPU setup
+# 使用多 GPU 設定
 accelerate launch \
   --multi_gpu \
   --num_processes=$NUM_GPUS \
@@ -85,27 +85,27 @@ accelerate launch \
   --job_name=$JOB_NAME
 ```
 
-## Performance Results
+## 效能結果
 
-### Libero Benchmark Results
+### Libero 基準測試結果
 
 > [!NOTE]
-> Follow our instructions for Libero usage: [Libero](./libero)
+> 請參考我們的 Libero 使用說明：[Libero](./libero)
 
-GR00T has demonstrated strong performance on the Libero benchmark suite. To compare and test its LeRobot implementation, we finetuned the GR00T N1.5 model for 30k steps on the Libero dataset and compared the results to the GR00T reference results.
+GR00T 在 Libero 基準測試套件上展現了優異的效能。為了比較和測試其 LeRobot 實作，我們在 Libero 資料集上對 GR00T N1.5 模型進行了 30k 步的微調，並將結果與 GR00T 參考結果進行比較。
 
-| Benchmark          | LeRobot Implementation | GR00T Reference |
-| ------------------ | ---------------------- | --------------- |
-| **Libero Spatial** | 82.0%                  | 92.0%           |
-| **Libero Object**  | 99.0%                  | 92.0%           |
-| **Libero Long**    | 82.0%                  | 76.0%           |
-| **Average**        | 87.0%                  | 87.0%           |
+| 基準測試           | LeRobot 實作 | GR00T 參考值 |
+| ------------------ | ------------ | ------------ |
+| **Libero Spatial** | 82.0%        | 92.0%        |
+| **Libero Object**  | 99.0%        | 92.0%        |
+| **Libero Long**    | 82.0%        | 76.0%        |
+| **平均**           | 87.0%        | 87.0%        |
 
-These results demonstrate GR00T's strong generalization capabilities across diverse robotic manipulation tasks. To reproduce these results, you can follow the instructions in the [Libero](https://huggingface.co/docs/lerobot/libero) section.
+這些結果展示了 GR00T 在各種機器人操作任務中強大的泛化能力。若要重現這些結果，您可以參考 [Libero](https://huggingface.co/docs/lerobot/libero) 章節中的說明。
 
-### Evaluate in your hardware setup
+### 在您的硬體環境中進行評估
 
-Once you have trained your model using your parameters you can run inference in your downstream task. Follow the instructions in [Imitation Learning for Robots](./il_robots). For example:
+使用您的參數訓練模型完成後，您可以在下游任務中執行推論。請參考[機器人的模仿學習](./il_robots)中的說明。例如：
 
 ```bash
 lerobot-record \
@@ -124,11 +124,11 @@ lerobot-record \
   --dataset.streaming_encoding=true \
   --dataset.encoder_threads=2 \
   # --dataset.vcodec=auto \
-  --policy.path=<user>/groot-bimanual \ # your trained model
+  --policy.path=<user>/groot-bimanual \ # 您訓練好的模型
   --dataset.episode_time_s=30 \
   --dataset.reset_time_s=10
 ```
 
-## License
+## 授權條款
 
-This model follows NVIDIA's proprietary license, consistent with the original [GR00T repository](https://github.com/NVIDIA/Isaac-GR00T). Future versions (starting from N1.7) will follow **Apache 2.0 License**.
+此模型遵循 NVIDIA 的專有授權條款，與原始 [GR00T 儲存庫](https://github.com/NVIDIA/Isaac-GR00T)一致。未來版本（從 N1.7 開始）將採用 **Apache 2.0 授權條款**。
