@@ -56,10 +56,10 @@ wall_clock      ≈ total_steps × per_step_time
 
 以下是在 4×H100 80 GB 集群上运行的参考数据（`accelerate launch --num_processes=4`）：5000 步、批量大小 32、AdamW，数据集为 [`imstevenpmwork/super_poulain_draft`](https://huggingface.co/datasets/imstevenpmwork/super_poulain_draft)（约 50 个片段、约 640×480 图像）：
 
-| 策略        | 实际耗时     | `update_s` | `dataloading_s` | GPU 利用率 | 关键参数                                                                                                                      |
-| ----------- | ------------ | ---------: | --------------: | ---------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `diffusion` | 16 分 17 秒  |      0.167 |           0.015 | ~90%       | 默认值（从头开始训练）                                                                                                        |
-| `smolvla`   | 27 分 49 秒  |      0.312 |           0.011 | ~80%       | `--policy.path=lerobot/smolvla_base`、`freeze_vision_encoder=false`、`train_expert_only=false`                                |
+| 策略        | 实际耗时     | `update_s` | `dataloading_s` | GPU 利用率 | 关键参数                                                                                                                                |
+| ----------- | ------------ | ---------: | --------------: | ---------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `diffusion` | 16 分 17 秒  |      0.167 |           0.015 | ~90%       | 默认值（从头开始训练）                                                                                                                  |
+| `smolvla`   | 27 分 49 秒  |      0.312 |           0.011 | ~80%       | `--policy.path=lerobot/smolvla_base`、`freeze_vision_encoder=false`、`train_expert_only=false`                                          |
 | `pi05`      | 3 小时 41 分 |      2.548 |           0.014 | ~95%       | `--policy.pretrained_path=lerobot/pi05_base`、`gradient_checkpointing=true`、`dtype=bfloat16`，视觉编码器与专家网络（expert）均参与训练 |
 
 `dataloading_s` 与 `update_s` 的比值是重要的诊断指标：当 `dataloading_s` 接近 `update_s` 时，增加 GPU 将不再有帮助——此时数据加载器是瓶颈，应先检查 `--num_workers`、图像分辨率和磁盘速度，再增加算力。
