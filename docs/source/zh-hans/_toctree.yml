@@ -41,6 +41,12 @@
     title: 实时分块（RTC）
   title: "推理"
 - sections:
+  - local: envhub
+    title: 从 Hub 加载环境
+  - local: envhub_leisaac
+    title: LeIsaac × LeRobot EnvHub
+  title: "仿真"
+- sections:
   - local: notebooks
     title: Notebooks
   - local: feetech
