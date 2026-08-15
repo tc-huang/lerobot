@@ -35,6 +35,8 @@
     title: SmolVLA
   title: "策略"
 - sections:
+  - local: inference
+    title: 策略部署（lerobot-rollout）
   - local: async
     title: 异步推理
   - local: rtc
@@ -46,6 +48,12 @@
   - local: envhub_leisaac
     title: LeIsaac × LeRobot EnvHub
   title: "仿真"
+- sections:
+  - local: adding_benchmarks
+    title: 添加新的基准测试
+  - local: metaworld
+    title: Meta-World
+  title: "基准测试"
 - sections:
   - local: notebooks
     title: Notebooks
