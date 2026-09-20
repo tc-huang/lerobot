@@ -1,0 +1,104 @@
+# Copyright 2026 The HuggingFace Inc. team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Documentation Translation Deploy
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - docs/i18n-zh-hant-workflow
+    paths:
+      - "docs/source/zh-hant/**"
+      - ".github/workflows/documentation-translation-deploy.yml"
+
+permissions:
+  contents: read
+
+env:
+  UV_VERSION: "0.11.30"
+  PYTHON_VERSION: "3.12"
+  DOC_BUILDER_SHA: "662b3433d61ad5d6afbf8f4a1fb02d9dcec74e2d"
+  WRANGLER_VERSION: "4.135.0"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_translated_docs:
+    name: Build ${{ matrix.docs_dir }} Docs
+    if: github.repository == 'tc-huang/lerobot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - docs_dir: zh-hant
+            language: zh-TW
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup uv and Python
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # v8.3.2
+        with:
+          enable-cache: false
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install lerobot
+        run: uv sync --locked --extra dataset
+
+      # Upstream doc-builder renders HTML against the private moon-landing frontend, which cannot
+      # be self-hosted; this fork replaces that shell. Drop it once the change lands upstream.
+      # `--editable` is what makes the fork's `kit/` the one actually used: --html resolves it
+      # relative to the installed module, and otherwise falls back to cloning upstream unpinned.
+      - name: Install doc-builder
+        run: |
+          git clone --filter=blob:none https://github.com/tc-huang/doc-builder.git .vendor/doc-builder
+          git -C .vendor/doc-builder checkout "$DOC_BUILDER_SHA"
+          uv pip install --editable .vendor/doc-builder "watchdog>=6.0.0"
+
+      - name: Build translated docs
+        env:
+          DOCS_DIR: ${{ matrix.docs_dir }}
+          LANGUAGE: ${{ matrix.language }}
+        run: |
+          uv run --no-sync doc-builder build \
+            --language "$LANGUAGE" \
+            --build_dir build/docs \
+            --version main \
+            --html \
+            lerobot "docs/source/$DOCS_DIR"
+
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DOCS_DIR: ${{ matrix.docs_dir }}
+          LANGUAGE: ${{ matrix.language }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          : "${CLOUDFLARE_API_TOKEN:?missing repository secret}"
+          : "${CLOUDFLARE_ACCOUNT_ID:?missing repository secret}"
+          output="build/docs/lerobot/main/$LANGUAGE"
+          [ -d "$output" ] || { echo "no build output at $output" >&2; exit 1; }
+          npx --yes "wrangler@$WRANGLER_VERSION" pages deploy build \
+            --project-name "lerobot-docs-$DOCS_DIR" \
+            --branch "$BRANCH"
