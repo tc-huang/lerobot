@@ -1,0 +1,229 @@
+# Copyright 2026 The HuggingFace Inc. team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+name: Documentation Translation Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: OpenAI-compatible endpoint
+        type: choice
+        options:
+          - https://api.deepseek.com
+
+  push:
+    branches:
+      - docs/i18n-zh-hant-workflow
+    paths:
+      - "docs/source/**"
+      - "!docs/source/zh-hant/**"
+      - "docs/translation-prompts/**"
+      - "scripts/translation/**"
+      - ".github/workflows/documentation-translation-sync.yml"
+
+permissions:
+  contents: read
+
+env:
+  UV_VERSION: "0.11.30"
+  PYTHON_VERSION: "3.12"
+  DOC_BUILDER_SHA: "662b3433d61ad5d6afbf8f4a1fb02d9dcec74e2d"
+
+# Translation runs cost money and take a long time; never cancel one that is already paying.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  sync_translation:
+    name: Sync ${{ github.ref_name }}
+    if: github.repository == 'tc-huang/lerobot'
+    runs-on: ubuntu-latest
+    # Being killed here leaves the same partial state as a cancellation, so raise this before a
+    # full-tree run ever gets close to it.
+    timeout-minutes: 120
+    # No job-level permissions: every write goes through TRANSLATION_PR_TOKEN, so GITHUB_TOKEN
+    # never needs more than the workflow-level `contents: read` that checkout reads with.
+    env:
+      MODEL: ${{ vars.TRANSLATION_MODEL }}
+      BASE_URL: ${{ inputs.base_url || vars.TRANSLATION_BASE_URL }}
+    steps:
+      - name: Resolve target language
+        run: |
+          lang_tag="${GITHUB_REF_NAME#docs/i18n-}"
+          # doc-builder's kit only recognises a language segment shaped xx or xx-YY
+          # (kit/src/lib/hfDocPaths.js), so a script subtag like zh-hant cannot be passed
+          # through: every internal link would carry a doubled language segment. This row is
+          # the one thing about a language that cannot be derived from its branch name.
+          case "$lang_tag" in
+            zh-hant) doc_builder_language=zh-TW ;;
+            # Scratch branch for testing this workflow against the same language. Remove this row
+            # and the branch from `on.push.branches` once the workflow lands.
+            zh-hant-workflow) lang_tag=zh-hant doc_builder_language=zh-TW ;;
+            *) echo "$GITHUB_REF_NAME is not a configured translation branch" >&2; exit 1 ;;
+          esac
+          {
+            echo "LANG_TAG=$lang_tag"
+            echo "DOC_BUILDER_LANGUAGE=$doc_builder_language"
+            echo "SYNC_BRANCH=translation-sync/$lang_tag"
+          } >> "$GITHUB_ENV"
+
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup uv and Python
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # v8.3.2
+        with:
+          enable-cache: false
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install lerobot and doc-builder
+        run: |
+          # The dev extra is here for pre-commit, which the generated pages go through below. It
+          # is the only way to get the version uv.lock pins rather than whatever PyPI resolves to.
+          uv sync --locked --extra dataset --extra dev
+          git clone --filter=blob:none https://github.com/tc-huang/doc-builder.git .vendor/doc-builder
+          git -C .vendor/doc-builder checkout "$DOC_BUILDER_SHA"
+          uv pip install --editable .vendor/doc-builder "watchdog>=6.0.0"
+          # What the two translation scripts import; bounds follow pyproject.toml where it
+          # declares the same dependency. All but jinja2 are already here through lerobot or
+          # doc-builder at the versions uv.lock pinned, and uv leaves a satisfied package alone.
+          # jinja2 arrives only because PyTorch depends on it, which is exactly why it is named.
+          uv pip install \
+            "huggingface-hub>=1.6.0,<2.0.0" \
+            "jinja2>=3.1.0,<4.0.0" \
+            "pyyaml>=6.0.0,<7.0.0" \
+            "tqdm>=4.66.0,<5.0.0"
+
+      - name: Translate
+        env:
+          TRANSLATION_API_KEY: ${{ secrets.TRANSLATION_API_KEY }}
+        run: |
+          : "${TRANSLATION_API_KEY:?missing repository secret}"
+          : "${MODEL:?set the TRANSLATION_MODEL repository variable}"
+          : "${BASE_URL:?set the TRANSLATION_BASE_URL repository variable or pass the base_url input}"
+          uv run --no-sync scripts/translation/sync.py \
+            --lang-tag "$LANG_TAG" \
+            --model "$MODEL" \
+            --base_url "$BASE_URL" \
+            --report report.json
+
+      - name: Summarize translation
+        id: translation_result
+        run: |
+          skipped="$(jq '[.docs[] | select(.action == "skipped")] | length' report.json)"
+          echo "skipped=$skipped" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Translation result"
+            echo "Skipped pages: $skipped"
+            jq -r '.docs[] | select(.action == "skipped") | "- `" + .file_name + "`"' report.json
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check generated docs with pre-commit
+        run: |
+          git add "docs/source/$LANG_TAG"
+          # A hook that rewrites a file reports failure for it, so the first pass only applies
+          # fixes and the second `git add` stages them; the last pass is the gate.
+          uv run --no-sync pre-commit run || true
+          git add "docs/source/$LANG_TAG"
+          uv run --no-sync pre-commit run --show-diff-on-failure --color=always
+
+      - name: Stage translation changes
+        id: staged
+        run: |
+          git add "docs/source/$LANG_TAG"
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --cached --stat
+          fi
+
+      - name: Build translated docs
+        if: steps.staged.outputs.changed == 'true'
+        run: |
+          uv run --no-sync doc-builder build \
+            --language "$DOC_BUILDER_LANGUAGE" \
+            --build_dir build/docs \
+            --version main \
+            --html \
+            lerobot "docs/source/$LANG_TAG"
+          [ -d "build/docs/lerobot/main/$DOC_BUILDER_LANGUAGE" ] || { echo "no build output" >&2; exit 1; }
+
+      - name: Deploy preview to Cloudflare Pages
+        id: deploy
+        if: steps.staged.outputs.changed == 'true'
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0  # v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: >-
+            pages deploy build
+            --project-name lerobot-docs-${{ env.LANG_TAG }}
+            --branch ${{ env.SYNC_BRANCH }}
+
+      - name: Render report
+        if: steps.staged.outputs.changed == 'true'
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment-url }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          : "${DEPLOYMENT_URL:?wrangler did not report a deployment url}"
+          docs_path="docs/lerobot/main/$DOC_BUILDER_LANGUAGE"
+          uv run --no-sync scripts/translation/report.py \
+            --report report.json \
+            --preview-url "$DEPLOYMENT_URL/$docs_path" \
+            --current-url "https://lerobot-docs-$LANG_TAG.pages.dev/$docs_path" \
+            --repo-url "$REPO_URL" \
+            --prompt-url "$REPO_URL/blob/$GITHUB_REF_NAME/docs/translation-prompts/$LANG_TAG.md" \
+            --pr-body pr-body.md \
+            --comment comment.md
+
+      - name: Create or update pull request
+        if: steps.staged.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.TRANSLATION_PR_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          : "${GH_TOKEN:?missing repository secret}"
+          title="docs(i18n): sync $LANG_TAG translations"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$SYNC_BRANCH"
+          git commit -m "$title"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${REPOSITORY}.git" "$SYNC_BRANCH"
+
+          number="$(gh pr list --head "$SYNC_BRANCH" --state open --json number --jq '.[0].number')"
+          if [ -z "$number" ]; then
+            gh pr create --base "$GITHUB_REF_NAME" --head "$SYNC_BRANCH" --title "$title" \
+              --label documentation --body-file pr-body.md
+          else
+            # Editing the body notifies nobody, so the comment is what tells subscribers the
+            # branch moved. It is deliberately not posted when the pull request is first created.
+            gh pr edit "$number" --body-file pr-body.md
+            gh pr comment "$number" --body-file comment.md
+          fi
+
+      - name: Fail on skipped translations
+        if: steps.translation_result.outputs.skipped != '0'
+        run: |
+          echo "::error::Some pages were skipped; see the job summary."
+          exit 1

@@ -1,0 +1,61 @@
+# Task
+
+Translate the LeRobot documentation from English into the target language. The source is MDX rendered by Hugging Face `doc-builder`, and the output must be MDX as well.
+Preserve the meaning of the English source while keeping the translation fluent, with professional and consistent wording.
+{{ task_prompt }}
+
+# Output format
+
+Return the translated result and nothing else. Each input is placed under its own heading such as `# Source English MDX Content`; the headings are not part of the content and must never appear in your output.
+
+# General rules
+
+The main translation rules are listed below. For anything they do not cover, use professional judgement; the goal is a correct and fluent translation.
+
+## Structural fidelity
+
+- The number of paragraphs must match the English source **exactly**.
+- The number of headings and their levels must match the English source **exactly**.
+- Where possible, keep a line-by-line correspondence with the English source.
+- Every MDX component must be preserved.
+
+## Code blocks
+
+- Translate only the explanatory text in comments written in the block's own language.
+- Identifiers, paths, commands, flags and URLs inside comments stay in English.
+
+## Headings and anchors
+
+- Every heading must end with an explicit anchor holding the English slug, otherwise links pointing at it break.
+  `## Step 2: Environment Setup` → `## 步驟 2：環境設定[[step-2-environment-setup]]` (Traditional Chinese)
+- Derive the slug from the English heading: lowercase → delete every character that is not `a-z`, `0-9`, a space or `-` → replace each run of spaces with a single `-`. Do not strip leading or trailing `-`.
+- If the English heading already carries an `[[anchor]]`, or a link in the English source points at this heading, reuse that anchor instead of deriving one.
+
+| English heading | slug |
+| --- | --- |
+| `## Configure the motors` | `configure-the-motors` |
+| `### Step 3: Upload to the Hub` | `step-3-upload-to-the-hub` |
+| `### PyTorch CUDA variant (Linux only)` | `pytorch-cuda-variant-linux-only` |
+| `# Ubuntu/Debian` | `ubuntudebian` |
+| `## Step 3: Install LeRobot 🤗` | `step-3-install-lerobot` |
+
+## Links
+
+- **URLs**: for example `](https://...)` and `<a href="https://...">`, copy verbatim. The one exception: in `huggingface.co/docs/lerobot/en/...`, replace `en` with the target language tag.
+- **In-document links**: for example `](#anchor)`, `](./page)` and `](./page#anchor)`, copy verbatim. Translated headings keep their English slug anchors, so these links resolve without any adjustment.
+
+{{ lang_prompt }}
+
+# Source English MDX Content
+
+{{ doc_source_content }}
+
+{% if doc_source_diff is defined and doc_source_diff %}
+# Diff of Source English MDX Changes
+{{ doc_source_diff }}
+{% endif %}
+
+{% if doc_target_content is defined and doc_target_content %}
+# Target language MDX Old Content
+{{ doc_target_content }}
+{% endif %}

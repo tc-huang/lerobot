@@ -1,0 +1,115 @@
+## 🌐 {{ lang_tag }} documentation sync
+
+Machine-translated from the English docs by `scripts/translation/sync.py` using `{{ model }}`.
+Wording comes from the
+[translation prompt]({{ prompt_url }}).
+
+{% if last_sync %}
+Previous sync was {{ last_sync }}; English sources are now at {{ source }}.
+{% else %}
+English sources are at {{ source }}.
+{% endif %}
+
+Preview deployment: <{{ preview_url }}/>
+
+### Summary
+
+| Status | Count | Pages |
+|---|--:|---|
+{% for row in rows %}
+| {{ row.emoji }} {{ row.label }} | {{ row.count }} | {{ row.names }} |
+{% endfor %}
+| **Total** | **{{ total }}** | — |
+{% if needs_attention %}
+
+### Needs attention
+
+> [!WARNING]
+> These pages **keep their previous translation**: ⚠️ failed the structure check, 💥 raised an
+> error. The English source has moved ahead of them.
+>
+> | Page | | Current | English | Translated from | English now | Behind by |
+> |---|:-:|---|---|---|---|--:|
+{% for doc in needs_attention %}
+> | `{{ doc.name }}` | {{ doc.emoji }} | {{ doc.current }} | {{ doc.english }} | {{ doc.translated_from }} | {{ doc.english_now }} | {{ doc.behind }} |
+{% endfor %}
+{% endif %}
+{% if pages %}
+
+### Pages in this sync
+
+| Page | | Preview | English | Translated from | English now | Change |
+|---|:-:|---|---|---|---|--:|
+{% for doc in pages %}
+| `{{ doc.name }}` | {{ doc.emoji }} | {{ doc.preview }} | {{ doc.english }} | {{ doc.translated_from }} | {{ doc.english_now }} | {{ doc.change }} |
+{% endfor %}
+{% endif %}
+
+### How to review
+
+{{ to_review }}.
+{% if needs_attention %}
+
+#### Resolve the stale pages
+
+These still serve the translation from before this run.
+[Needs attention](#needs-attention) shows how far behind each one is.
+
+{% for doc in needs_attention %}
+- {{ doc.emoji }} `{{ doc.name }}` — {{ doc.current }} · {{ doc.english }}
+{% endfor %}
+{% for doc in errors %}
+
+<details>
+<summary>💥 <code>{{ doc.name }}</code> — error</summary>
+
+```text
+{{ doc.error }}
+```
+
+</details>
+{% endfor %}
+{% endif %}
+{% if read_in_full %}
+
+#### Read in full
+
+These pages are new, so every passage is a first translation.
+
+{% for doc in read_in_full %}
+- {{ doc.emoji }} `{{ doc.name }}` — {{ doc.preview }} · {{ doc.english }}
+{% endfor %}
+{% endif %}
+{% if changes %}
+
+#### Review the English changes
+
+The English sources are not part of this PR, so their diffs are below. The matching translation
+change is in the **Files changed** tab, and **preview** shows it rendered.
+Each block carries the `git diff` that produced it, so you can reproduce it locally.
+{% for doc in changes %}
+
+<details>
+<summary>{{ doc.emoji }} <code>{{ doc.name }}</code> — English <code>{{ doc.change_plain }}</code>{{ doc.note }}</summary>
+
+{{ doc.preview }} · {{ doc.english }}
+{% if not doc.diff %}
+
+Too large to inline. Reproduce it with:
+{% endif %}
+{% if doc.command %}
+
+```bash
+{{ doc.command }}
+```
+{% endif %}
+{% if doc.diff %}
+
+{{ doc.fence }}diff
+{{ doc.diff }}
+{{ doc.fence }}
+{% endif %}
+
+</details>
+{% endfor %}
+{% endif %}
