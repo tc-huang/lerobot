@@ -243,7 +243,7 @@ lerobot-train \
 
 **選項 2 — 重新初始化預測器的輸入投影（reinitialize the predictor input projection）**
 
-如果您想將 `world_model_num_views` 改為 2 以外的值，請以 `strict=False` 載入檢查點（checkpoint），並為新的 `embed_dim` 重新初始化（reinitialize） `model.video_predictor.predictor_embed`。其餘所有預測器區塊的權重（predictor block weights，attention、MLP、norm、輸出投影 projection）都與攝影機數量無關（camera-count-agnostic），可沿用預訓練檢查點（pretrained checkpoint）的值。
+如果您想將 `world_model_num_views` 改為 2 以外的值，請以 `strict=False` 載入檢查點（checkpoint），並為新的 `embed_dim` 重新初始化（reinitialize） `model.video_predictor.predictor_embed`。其餘所有預測器區塊的權重（predictor block weights，attention、MLP、norm、output projection）都與攝影機數量無關，可沿用預訓練檢查點（pretrained checkpoint）。
 
 ---
 
