@@ -557,6 +557,7 @@ class DocOutcome:
 @dataclass(frozen=True)
 class TranslationReport:
     lang_tag: str
+    lang_name: str
     model: str
     source: Commit | None
     last_sync: Commit | None
@@ -746,6 +747,7 @@ def main():
     if args.report:
         TranslationReport(
             lang_tag=lang_tag,
+            lang_name=LANG_TAG2NAME[lang_tag],
             model=args.model,
             source=localized_docs.get_latest_source_commit(),
             last_sync=localized_docs.get_last_sync_commit(),
