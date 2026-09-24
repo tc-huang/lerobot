@@ -131,7 +131,7 @@ lerobot-edit-dataset \
 - `episode_tasks`：從回合索引（episode index）到任務字串的映射（mapping）。
 - `task_replacements`：從既有任務字串到其取代字串的映射（mapping）；會套用至目前任務符合某個鍵（key）的回合。每個鍵都必須是資料集中的既有任務。
 
-這些模式可以在單次執行中合併使用。針對每個回合，任務會依下列優先順序（precedence）解析：
+這些模式可以在單次執行中合併使用。針對每個回合，任務會依下列優先順序解析：
 
 `episode_tasks` > `task_replacements` > `new_task` > 原始任務
 
