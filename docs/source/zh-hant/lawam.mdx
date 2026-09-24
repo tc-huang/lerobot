@@ -30,7 +30,7 @@ pip install -e ".[lawam,libero]" "mujoco==3.3.2"
 
 LIBERO 基準測試的成功率對 MuJoCo 模擬器版本很敏感。較新的 MuJoCo 版本可能會大幅降低量測到的 LIBERO 成功率，包括 LaWAM 以外的策略。這是評估環境相容性問題，而不是 LaWAM 適配器（adapter）問題。請使用 `mujoco==3.3.2` 來精確重現已發布的 LaWAM LIBERO 與論文結果。
 
-LaWAM 檢查點使用 LeRobot 原生的 `model.safetensors` 格式。完整的 LAM、VLM 適配器與 Flow 頭部狀態會透過 `policy.path` 還原；原始 LaWAM `.pt` 檔案不會由適配器載入。LAM 與 DINOv3 架構由 `LaWAMConfig` 直接表示，不需要另外下載檢查點。
+LaWAM 檢查點使用 LeRobot 原生的 `model.safetensors` 格式。完整的 LAM、VLM 適配器與 flow-head 狀態會透過 `policy.path` 還原；原始 LaWAM `.pt` 檔案不會由適配器載入。LAM 與 DINOv3 架構由 `LaWAMConfig` 直接表示，不需要另外下載檢查點。
 
 請將 `policy.base_vlm` 設為可攜式 Hub 模型 ID。Hugging Face 的標準快取設定（例如 `HF_HOME`）會控制 Qwen 檔案在本機的儲存位置，而不會將特定機器的路徑加入策略或處理器設定中。
 
