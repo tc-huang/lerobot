@@ -24,8 +24,8 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 TEMPLATE_DIR = Path(__file__).parent
 PR_BODY_TEMPLATE_NAME = "pr_body.md.jinja"
 COMMENT_TEMPLATE_NAME = "comment.md.jinja"
-DIFF_BUDGET_BYTES = 30_000
-PR_BODY_BUDGET_BYTES = 60_000
+DIFF_BUDGET_BYTES = 30000
+PR_BODY_BUDGET_BYTES = 60000
 ACTION_EMOJI = {"added": "🆕", "updated": "🔄", "removed": "🗑️", "skipped": "⚠️", "unchanged": "✅"}
 ACTION_LABEL = {
     "added": "Added",
@@ -58,34 +58,41 @@ def plural(count: int, noun: str) -> str:
 
 @dataclass(frozen=True)
 class SiteUrls:
-    preview: str
-    current: str
-    english: str
-    repo: str
-    prompt: str
+    preview: str  # root of this run's deployment; a page lives at <root>/<page name>
+    current: str  # root of the translation the last run published, not yet replaced by this one
+    english: str  # root of the English built for this run, in the same deployment as preview
+    repo: str  # the GitHub repository, what the commit links are built from
+    prompt: str  # the translation prompt, already a whole link rather than a root
 
 
 @dataclass(frozen=True)
 class DocView:
-    name: str
-    emoji: str
-    preview: str
-    current: str
-    english: str
-    translated_from: str
-    english_now: str
-    change: str
-    change_plain: str
-    behind: str
-    error: str | None
-    diff: str | None
-    fence: str
-    command: str | None
-    note: str
+    name: str  # the page, a source file name without its suffix
+    emoji: str  # what happened to the page, or 💥 when it raised
+    preview: str  # link to the page in this run's deployment, "—" once the page is removed
+    preview_html: str  # the same link as an anchor, for the <summary> line that keeps markdown literal
+    current: str  # link to the page as the last run published it
+    english: str  # link to the English page built for this run, "—" once the page is removed
+    english_html: str  # the same link as an anchor, again for the <summary> line
+    translated_from: str  # commit link for the English this translation was made from
+    english_now: str  # commit link for the English as this run found it
+    change: str  # the English diff stat, backquoted for a table cell
+    change_plain: str  # the same stat unquoted, for the <summary> line
+    behind: str  # how much English moved between those two commits, in commits and in lines
+    error: str | None  # what the page raised, None when it only failed the structure check
+    diff: str | None  # the English diff, None when there is none or it did not fit the body
+    fence: str  # a backtick fence long enough to wrap that diff
+    command: str | None  # the git diff that reproduces it, None when there is no diff to reproduce
+    note: str  # the ", diff not inlined" suffix for the <summary> line, empty otherwise
 
 
 def _link(label: str, url: str | None) -> str:
     return f"[{label}]({url})" if url else "—"
+
+
+# Markdown inside a <summary> line is not rendered, so the collapsed rows need real anchors.
+def _html_link(label: str, url: str | None) -> str:
+    return f'<a href="{url}">{label}</a>' if url else "—"
 
 
 def _commit(commit: dict | None, repo_url: str, prefix: str = "") -> str:
@@ -94,7 +101,7 @@ def _commit(commit: dict | None, repo_url: str, prefix: str = "") -> str:
     return f"{prefix}[`{commit['commit'][:7]}`]({repo_url}/commit/{commit['commit']}) {commit['date'][:10]}"
 
 
-def _doc_view(doc: dict, urls: SiteUrls, inlined: bool) -> DocView:
+def _doc_view(doc: dict, urls: SiteUrls, lang_name: str, inlined: bool) -> DocView:
     name = Path(doc["file_name"]).stem
     action, removed = doc["action"], doc["action"] == "removed"
     source_diff = doc["source_diff"]
@@ -102,12 +109,16 @@ def _doc_view(doc: dict, urls: SiteUrls, inlined: bool) -> DocView:
     change_plain = f"+{stat[0]} −{stat[1]}" if stat else "—"
     change = f"`{change_plain}`" if stat else "—"
     commits = doc["commits_since"]
+    preview_url = None if removed else f"{urls.preview}/{name}"
+    english_url = None if removed else f"{urls.english}/{name}"
     return DocView(
         name=name,
         emoji=ERROR_EMOJI if doc["error"] else ACTION_EMOJI[action],
-        preview=_link("preview", None if removed else f"{urls.preview}/{name}"),
-        current=_link("current", f"{urls.current}/{name}"),
-        english=_link("English", None if removed else f"{urls.english}/{name}"),
+        preview=_link(lang_name, preview_url),
+        preview_html=_html_link(lang_name, preview_url),
+        current=_link(lang_name, f"{urls.current}/{name}"),
+        english=_link("English", english_url),
+        english_html=_html_link("English", english_url),
         translated_from=_commit(doc["translated_from"], urls.repo),
         english_now=_commit(doc["english_now"], urls.repo, "removed in " if removed else ""),
         change=change,
@@ -173,8 +184,13 @@ def _to_review(needs_attention: int, read_in_full: int, changes: int) -> str:
 
 def build_context(report: dict, urls: SiteUrls, inlined: set[str]) -> dict:
     docs = report["docs"]
+    lang_name = report["lang_name"]
     views = {
-        action: [_doc_view(doc, urls, doc["file_name"] in inlined) for doc in docs if doc["action"] == action]
+        action: [
+            _doc_view(doc, urls, lang_name, doc["file_name"] in inlined)
+            for doc in docs
+            if doc["action"] == action
+        ]
         for action in ACTION_EMOJI
     }
     return {
