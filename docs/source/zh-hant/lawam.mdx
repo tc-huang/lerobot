@@ -112,13 +112,13 @@ LaWAM 檢查點會明確儲存主要相機與手腕相機角色，而不是從 `
 
 常見的 LaWAM 專用策略欄位（policy fields）：
 
-| 欄位              | 說明                                                                   |
-| ----------------- | ---------------------------------------------------------------------- |
-| `base_vlm`        | 儲存於已發布策略設定中的可攜式 Qwen/Qwen3-VL Hub 模型 ID。             |
-| `action_horizon`  | 每個區塊（chunk）預測的動作數量，最多至 `chunk_size`。                          |
-| `flow_action_dim` | LaWAM flow head 使用的內部填充動作維度（internal padded action dimension）。                                |
-| `flow_state_dim`  | LaWAM flow head 使用的內部填充狀態維度（internal padded state dimension）。                                |
-| `embodiment_id`   | 當 LeRobot 資料集未提供具身（embodiment）ID 時所使用的 LaWAM 具身 ID。 |
+| 欄位              | 說明                                                                         |
+| ----------------- | ---------------------------------------------------------------------------- |
+| `base_vlm`        | 儲存於已發布策略設定中的可攜式 Qwen/Qwen3-VL Hub 模型 ID。                   |
+| `action_horizon`  | 每個區塊（chunk）預測的動作數量，最多至 `chunk_size`。                       |
+| `flow_action_dim` | LaWAM flow head 使用的內部填充動作維度（internal padded action dimension）。 |
+| `flow_state_dim`  | LaWAM flow head 使用的內部填充狀態維度（internal padded state dimension）。  |
+| `embodiment_id`   | 當 LeRobot 資料集未提供具身（embodiment）ID 時所使用的 LaWAM 具身 ID。       |
 
 ## 引用[[citation]]
 

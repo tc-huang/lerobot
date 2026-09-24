@@ -161,12 +161,12 @@ lerobot-rollout \
 
 | 旗標（flag）                         | 描述                                                                                                                                         |
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--strategy.num_episodes`            | 要錄製的修正回合數量（預設：10）                                                                                        |
-| `--strategy.record_autonomous`       | 也錄製自主影格（autonomous frames，預設：false）                                                                                                      |
-| `--strategy.upload_every_n_episodes` | 每 N 個回合推送到 Hub（預設：5）                                                                                                  |
+| `--strategy.num_episodes`            | 要錄製的修正回合數量（預設：10）                                                                                                             |
+| `--strategy.record_autonomous`       | 也錄製自主影格（autonomous frames，預設：false）                                                                                             |
+| `--strategy.upload_every_n_episodes` | 每 N 個回合推送到 Hub（預設：5）                                                                                                             |
 | `--strategy.input_device`            | 輸入裝置：`keyboard` 或 `pedal`（預設：keyboard）                                                                                            |
 | `--strategy.smooth_handover`         | 在暫停 / 修正開始時平滑地移交控制權（預設：true）。對於在接合時會以目前機器人姿勢重新建立參考的離合器式遙操作（clutch-style teleop），請停用 |
-| `--teleop.type`                      | **必填。** 遙操作器（Teleoperator）類型                                                                                                     |
+| `--teleop.type`                      | **必填。** 遙操作器（Teleoperator）類型                                                                                                      |
 
 ### Episodic（`--strategy.type=episodic`）[[episodic---strategytypeepisodic]]
 
@@ -197,15 +197,15 @@ lerobot-rollout \
 | `←`（左） | 捨棄回合（discard episode）並重新錄製（re-record it） |
 | `ESC`     | 停止（stop）錄製階段（recording session）             |
 
-| 旗標（flag）                                    | 描述（description）                                                                                                                        |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `--dataset.num_episodes`                        | 要錄製的回合數量                                                                                          |
-| `--dataset.episode_time_s`                      | 以秒為單位的每個錄製回合的時長。當 `--duration` 已設定而此項未設定時，預設為 `--duration` |
-| `--dataset.reset_time_s`                        | 以秒為單位的回合之間重設階段的時長                                                         |
-| `--teleop.type`                                 | 可選。在重設期間（reset phase）驅動機器人的遙操作器（teleoperator）                                                                             |
-| `--strategy.reset_to_initial_position`          | 是否在回合（episode）之間將機器人重設（reset）到其初始位置（initial position）                                                             |
-| `--strategy.smooth_leader_to_follower_handover` | 是否開啟或關閉主臂（leader）-> 從臂（follower）的平滑交接行為。                                                |
-| `--strategy.smooth_handover`                    | 在重設開始時平滑地將控制權移交給遙操（預設：true）。對於在接合時會以目前機器人姿勢重新建立參考的離合器式遙操作（clutch-style teleops），請停用此選項   |
+| 旗標（flag）                                    | 描述（description）                                                                                                                                  |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--dataset.num_episodes`                        | 要錄製的回合數量                                                                                                                                     |
+| `--dataset.episode_time_s`                      | 以秒為單位的每個錄製回合的時長。當 `--duration` 已設定而此項未設定時，預設為 `--duration`                                                            |
+| `--dataset.reset_time_s`                        | 以秒為單位的回合之間重設階段的時長                                                                                                                   |
+| `--teleop.type`                                 | 可選。在重設期間（reset phase）驅動機器人的遙操作器（teleoperator）                                                                                  |
+| `--strategy.reset_to_initial_position`          | 是否在回合（episode）之間將機器人重設（reset）到其初始位置（initial position）                                                                       |
+| `--strategy.smooth_leader_to_follower_handover` | 是否開啟或關閉主臂（leader）-> 從臂（follower）的平滑交接行為。                                                                                      |
+| `--strategy.smooth_handover`                    | 在重設開始時平滑地將控制權移交給遙操（預設：true）。對於在接合時會以目前機器人姿勢重新建立參考的離合器式遙操作（clutch-style teleops），請停用此選項 |
 
 ### 自帶策略（Bring your own strategy）[[bring-your-own-strategy]]
 
@@ -241,7 +241,7 @@ class PatrolStrategy(RolloutStrategy):
 | `dataset_mode`                  | `"none"`（預設）會拒絕 `--dataset.*` 旗標，`"optional"` 在提供這些旗標時進行錄製，`"required"` 則讓 `--dataset.repo_id` 成為必填 |
 | `requires_teleop`               | 讓 `--teleop.type` 成為必填                                                                                                      |
 | `supports_interactive`          | 允許 `--interactive=true`；此時 `run()` 必須遵守記錄在 `RolloutStrategy` 上的可重新啟動契約                                      |
-| `requires_streaming_encoding()` | 當影格（frames）是從控制迴圈內部寫入時回傳 `True`：`--dataset.streaming_encoding` 會被強制開啟                                    |
+| `requires_streaming_encoding()` | 當影格（frames）是從控制迴圈內部寫入時回傳 `True`：`--dataset.streaming_encoding` 會被強制開啟                                   |
 | `extra_dataset_features()`      | 策略擁有的資料集欄位（例如 DAgger 的 `intervention`）；每個錄製的影格都必須帶有這些欄位                                          |
 
 將發行版（distribution）命名為 `lerobot_strategy_<name>`，`lerobot-rollout` 便會在解析 CLI 之前匯入該套件 —— 只會執行其 `__init__.py`，因此請在該處匯入設定（config）。若套件名稱不同，可使用 `--strategy.discover_packages_path=<package>` 載入該套件（包含子模組）。策略的 dataclass 欄位會變成 `--strategy.*` 旗標：
@@ -298,7 +298,7 @@ lerobot-rollout \
 | `--inference.rtc.mode`                      | `guided`（預設）或用於相容 Pi05 檢查點的已訓練前綴（trained-prefix）`trained`            |
 | `--inference.rtc.max_guidance_weight`       | 一致性強制的強度（consistency enforcement strength，預設：依策略 policy 而異）           |
 | `--inference.rtc.prefix_attention_schedule` | 混合排程（blend schedule）：`LINEAR`、`EXP`、`ONES`、`ZEROS`                             |
-| `--inference.queue_threshold`               | 背壓閾值（backpressure threshold）；已訓練的 RTC 至少需要其最大延遲                                |
+| `--inference.queue_threshold`               | 背壓閾值（backpressure threshold）；已訓練的 RTC 至少需要其最大延遲                      |
 
 調校 RTC 參數（parameters）的細節請參閱[即時分塊（Real-Time Chunking）](./rtc)指南。
 
@@ -319,16 +319,15 @@ lerobot-rollout \
     --interactive=true
 ```
 
-| 指令（command）     | 動作（action）                                                                                                          |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `/start`            | 開始（或重新開始）策略控制迴圈                                                                                          |
+| 指令（command）     | 動作（action）                                                                                                                         |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `/start`            | 開始（或重新開始）策略控制迴圈                                                                                                         |
 | `/subtask <text>`   | 在不停止的情況下變更策略遵循的指令（instruction）。不帶引數時會印出目前的任務。只會影響以語言為條件的策略（SmolVLA、π0/π0.5 等類似者） |
-| `/vqa <text>`       | 針對策略目前所見向它提問。僅在執行進行中可用，且僅適用於具有 text head 的策略                                   |
-| `/autosteer <goal>` | 交給策略一個高階目標，讓它自行選擇子任務。`/autosteer off` 會交還控制權；不帶引數時會回報目前的目標                     |
-| `/reset`            | 停止移動、將機器人返回其啟動位置，並還原 `--task` 指令                                                                  |
-| `/stop`             | 結束工作階段並執行一般的關閉程序                                                                                        |
-| `/help`             | 列出指令                                                                                                                |
-
+| `/vqa <text>`       | 針對策略目前所見向它提問。僅在執行進行中可用，且僅適用於具有 text head 的策略                                                          |
+| `/autosteer <goal>` | 交給策略一個高階目標，讓它自行選擇子任務。`/autosteer off` 會交還控制權；不帶引數時會回報目前的目標                                    |
+| `/reset`            | 停止移動、將機器人返回其啟動位置，並還原 `--task` 指令                                                                                 |
+| `/stop`             | 結束工作階段並執行一般的關閉程序                                                                                                       |
+| `/help`             | 列出指令                                                                                                                               |
 
 以 `>` 開頭的行是你輸入的內容；工作階段本身不會顯示提示符號。
 
