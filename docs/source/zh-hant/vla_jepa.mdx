@@ -38,7 +38,7 @@ VLA-JEPA 有三個主要組件（components）：
 預設值（preset）只設定注意力幾何（attention geometry），每個項目都可透過
 `action_num_heads` / `action_attention_head_dim` 覆寫（override）。由此可推導出兩種寬度：
 
-- DiT 的**內部**寬度為 `heads x head_dim`（`DiT-B` 為 768），是推導而來而非透過設定指定；
+- DiT 的**內部**寬度為 `heads x head_dim`（`DiT-B` 為 768），是推導而來而非透過設定。
 - DiT 的**輸出**寬度，以及動作解碼器與狀態編碼器（action-decoder and state-encoder）MLP 的寬度，為
   `action_hidden_size`（預設 1024）。
 
