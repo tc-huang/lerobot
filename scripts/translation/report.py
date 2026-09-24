@@ -21,7 +21,6 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-ENGLISH_DOC_URL = "https://huggingface.co/docs/lerobot/en"
 TEMPLATE_DIR = Path(__file__).parent
 PR_BODY_TEMPLATE_NAME = "pr_body.md.jinja"
 COMMENT_TEMPLATE_NAME = "comment.md.jinja"
@@ -61,6 +60,7 @@ def plural(count: int, noun: str) -> str:
 class SiteUrls:
     preview: str
     current: str
+    english: str
     repo: str
     prompt: str
 
@@ -107,7 +107,7 @@ def _doc_view(doc: dict, urls: SiteUrls, inlined: bool) -> DocView:
         emoji=ERROR_EMOJI if doc["error"] else ACTION_EMOJI[action],
         preview=_link("preview", None if removed else f"{urls.preview}/{name}"),
         current=_link("current", f"{urls.current}/{name}"),
-        english=_link("English", None if removed else f"{ENGLISH_DOC_URL}/{name}"),
+        english=_link("English", None if removed else f"{urls.english}/{name}"),
         translated_from=_commit(doc["translated_from"], urls.repo),
         english_now=_commit(doc["english_now"], urls.repo, "removed in " if removed else ""),
         change=change,
@@ -227,6 +227,7 @@ def main():
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--preview-url", required=True, help="root of the deployment built for this run")
     parser.add_argument("--current-url", required=True, help="root of the published translated docs")
+    parser.add_argument("--english-url", required=True, help="root of the English docs built for this run")
     parser.add_argument("--repo-url", default="https://github.com/huggingface/lerobot")
     parser.add_argument("--prompt-url", required=True, help="link to the translation prompt")
     parser.add_argument("--pr-body", type=Path, required=True)
@@ -236,6 +237,7 @@ def main():
     urls = SiteUrls(
         preview=args.preview_url.rstrip("/"),
         current=args.current_url.rstrip("/"),
+        english=args.english_url.rstrip("/"),
         repo=args.repo_url.rstrip("/"),
         prompt=args.prompt_url,
     )

@@ -167,6 +167,28 @@ jobs:
             lerobot "docs/source/$LANG_TAG"
           [ -d "build/docs/lerobot/main/$DOC_BUILDER_LANGUAGE" ] || { echo "no build output" >&2; exit 1; }
 
+      - name: Build English docs
+        if: steps.staged.outputs.changed == 'true'
+        run: |
+          # The report links every page to the English it was translated from, so English ships in
+          # the same deployment instead of pointing at a site that moves on its own.
+          en_source="$RUNNER_TEMP/docs-en"
+          rm -rf "$en_source"
+          # -L resolves contributing.md, a symlink to the repository CONTRIBUTING.md that a copy
+          # of the link itself could not follow from anywhere else.
+          cp -RL docs/source "$en_source"
+          # doc-builder sweeps its source folder recursively and then requires every built page to
+          # be listed in _toctree.yml, so the other documentation roots cannot come along. A
+          # subdirectory with its own _toctree.yml is a translation; api/ has none and stays.
+          find "$en_source" -mindepth 2 -name _toctree.yml -exec dirname {} \; | xargs rm -rf
+          uv run --no-sync doc-builder build \
+            --language en \
+            --build_dir build/docs \
+            --version main \
+            --html \
+            lerobot "$en_source"
+          [ -d "build/docs/lerobot/main/en" ] || { echo "no English build output" >&2; exit 1; }
+
       - name: Deploy preview to Cloudflare Pages
         id: deploy
         if: steps.staged.outputs.changed == 'true'
@@ -191,6 +213,7 @@ jobs:
             --report report.json \
             --preview-url "$DEPLOYMENT_URL/$docs_path" \
             --current-url "https://lerobot-docs-$LANG_TAG.pages.dev/$docs_path" \
+            --english-url "$DEPLOYMENT_URL/docs/lerobot/main/en" \
             --repo-url "$REPO_URL" \
             --prompt-url "$REPO_URL/blob/$GITHUB_REF_NAME/docs/translation-prompts/$LANG_TAG.md" \
             --pr-body pr-body.md \
