@@ -85,14 +85,12 @@ These pages are new, so every passage is a first translation.
 #### Review the English changes
 
 The English sources are not part of this PR, so their diffs are below. The matching translation
-change is in the **Files changed** tab, and **preview** shows it rendered.
+change is in the **Files changed** tab, and the preview link shows it rendered.
 Each block carries the `git diff` that produced it, so you can reproduce it locally.
 {% for doc in changes %}
 
 <details>
-<summary>{{ doc.emoji }} <code>{{ doc.name }}</code> — English <code>{{ doc.change_plain }}</code>{{ doc.note }}</summary>
-
-{{ doc.preview }} · {{ doc.english }}
+<summary>{{ doc.emoji }} <code>{{ doc.name }}</code> — {{ doc.preview_html }} · {{ doc.english_html }} — <code>{{ doc.change_plain }}</code>{{ doc.note }}</summary>
 {% if not doc.diff %}
 
 Too large to inline. Reproduce it with:
