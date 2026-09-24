@@ -93,7 +93,7 @@
       "title": "人在迴圈中的資料收集（Human In the Loop Data Collection）"
     },
     "hilserl.mdx": {
-      "source_version": "09a370f3d1a5ec5ce75bec1a223689a2317d9785",
+      "source_version": "62d9b17d9bc6ae36c38139a8f52ee637cf2abd0f",
       "title": "使用強化學習訓練機器人（Train a Robot with RL）"
     },
     "hilserl_sim.mdx": {
@@ -269,7 +269,7 @@
       "title": "SARM"
     },
     "smolvla.mdx": {
-      "source_version": "e28270c9be69e0ab119d64ccf67f4904d1617414",
+      "source_version": "aa7bb5defe149961d51690e7e6f808c4375978b0",
       "title": "SmolVLA"
     },
     "so100.mdx": {
