@@ -74,7 +74,7 @@ LeRobot 預設使用 [TorchCodec](https://github.com/meta-pytorch/torchcodec) �
 > [!NOTE]
 > **平台支援：** TorchCodec 在 macOS Intel（x86_64）、Linux ARM（aarch64、arm64、armv7l），或搭配 PyTorch < 2.8 的 Windows 上**無法使用**。在這些平台上，LeRobot 會自動回退（fall back）到 `pyav`，因此您不需要安裝 `ffmpeg`，可直接跳到步驟 3。
 >
-> **Jetson（aarch64 + CUDA）：** 上述的 `pyav` 回退表示預設沒有 GPU 加速的影片解碼。[`docker/Dockerfile.jetson`](https://github.com/huggingface/lerobot/blob/main/docker/Dockerfile.jetson) 會針對 JetPack 6.2 從原始碼建置具備 CUDA 支援的 `torch`／`torchcodec`——由社群維護，預建置映像（prebuilt image）請見 [`ravediamond/lerobot-jetson`](https://github.com/ravediamond/lerobot-jetson)，背景說明請見 issue [#819](https://github.com/huggingface/lerobot/issues/819)。
+> **Jetson（aarch64 + CUDA）：** 上述的 `pyav` 回退（fallback）表示預設沒有 GPU 加速的影片解碼。[`docker/Dockerfile.jetson`](https://github.com/huggingface/lerobot/blob/main/docker/Dockerfile.jetson) 會針對 JetPack 6.2 從原始碼建置具備 CUDA 支援的 `torch`／`torchcodec`——由社群維護，預建置映像（prebuilt image）請見 [`ravediamond/lerobot-jetson`](https://github.com/ravediamond/lerobot-jetson)，背景說明請見 issue [#819](https://github.com/huggingface/lerobot/issues/819)。
 
 若您的平台支援 TorchCodec，請使用下列其中一種方式安裝 `ffmpeg`：
 

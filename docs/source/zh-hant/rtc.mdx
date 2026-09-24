@@ -97,7 +97,7 @@ for step in range(num_steps):
 - `guided`（預設）在去噪（denoising）期間套用原始的雅可比引導（Jacobian guidance），可與一般的流匹配檢查點搭配使用。
 - `trained` 會以每個動作的流時間步（per-action flow timesteps）對前一個區塊的前綴進行硬式修復（hard-inpaint）。它目前需要以 `policy.rtc_training_max_delay > 0` 訓練的 Pi05 檢查點，並可避免引導的反向傳遞（backward pass）。
 
-對於 trained 模式，`execution_horizon` 與 rollout 後端的
+對於 trained mode，`execution_horizon` 與 rollout 後端的
 `inference.queue_threshold` 都必須至少為檢查點的
 `rtc_training_max_delay`，且 `execution_horizon` 不得超過
 `chunk_size - rtc_training_max_delay`（即 RTC 論文中的 `d <= s <= H - d`

@@ -18,19 +18,19 @@ lerobot-rollout \
 
 這會執行策略（policy）30 秒，且不錄製（record）。
 
-### 選擇裝置（Choosing a device）[[choosing-a-device]]
+### 選擇裝置[[choosing-a-device]]
 
-傳入 `--device=cpu` 或 `--device=cuda`，即可在該裝置可用的主機上覆寫檢查點（checkpoint）裝置。
+傳入 `--device=cpu` 或 `--device=cuda`，即可在該裝置可用的主機上覆寫檢查點裝置（checkpoint device）。
 解析出的裝置會在載入策略（policy）與建構其處理器（processor）之前，套用到策略設定（policy configuration）中。
 例如，若策略支援 CPU 執行，可在上述指令中加入 `--device=cpu`，在僅有 CPU 的主機上執行以 CUDA 訓練的檢查點。
-在機器人上部署前，請確認 CPU 推論（inference）能達到你所需的控制頻率。
+在機器人上部署前，請確認 CPU 推論（inference）能達到你所需的控制頻率（control rate）。
 
 若省略 `--device`，rollout 會使用策略設定中的裝置（若有設定），否則自動選擇可用的裝置。
 搭配 `build_rollout_context` 使用 `RolloutConfig(device=...)` 時，行為亦同。
 
 ---
 
-## 執行策略（strategies）[[strategies]]
+## 策略（strategies）[[strategies]]
 
 以 `--strategy.type=<name>` 選擇執行策略（strategy）。每種執行策略定義一個不同的控制迴圈（control loop），具有其自身的錄製（recording）與互動語意（interaction semantics）。
 
@@ -161,12 +161,12 @@ lerobot-rollout \
 
 | 旗標（flag）                         | 描述                                                                                                                                         |
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--strategy.num_episodes`            | 要錄製（record）的修正回合（episode）數量（預設：10）                                                                                        |
-| `--strategy.record_autonomous`       | 也錄製（record）自主影格（預設：false）                                                                                                      |
-| `--strategy.upload_every_n_episodes` | 每 N 個回合（episode）推送到 Hub（預設：5）                                                                                                  |
+| `--strategy.num_episodes`            | 要錄製的修正回合數量（預設：10）                                                                                        |
+| `--strategy.record_autonomous`       | 也錄製自主影格（autonomous frames，預設：false）                                                                                                      |
+| `--strategy.upload_every_n_episodes` | 每 N 個回合推送到 Hub（預設：5）                                                                                                  |
 | `--strategy.input_device`            | 輸入裝置：`keyboard` 或 `pedal`（預設：keyboard）                                                                                            |
 | `--strategy.smooth_handover`         | 在暫停 / 修正開始時平滑地移交控制權（預設：true）。對於在接合時會以目前機器人姿勢重新建立參考的離合器式遙操作（clutch-style teleop），請停用 |
-| `--teleop.type`                      | **必填。** 遙操作（teleoperation）器類型                                                                                                     |
+| `--teleop.type`                      | **必填。** 遙操作器（Teleoperator）類型                                                                                                     |
 
 ### Episodic（`--strategy.type=episodic`）[[episodic---strategytypeepisodic]]
 
@@ -199,17 +199,17 @@ lerobot-rollout \
 
 | 旗標（flag）                                    | 描述（description）                                                                                                                        |
 | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `--dataset.num_episodes`                        | 要錄製的回合數量（number of episodes to record）                                                                                           |
-| `--dataset.episode_time_s`                      | 以秒為單位的每個錄製回合的時長（duration of each recording episode in seconds）。當 `--duration` 已設定而此項未設定時，預設為 `--duration` |
-| `--dataset.reset_time_s`                        | 以秒為單位的回合之間重設階段的時長（duration of the reset phase between episodes）                                                         |
-| `--teleop.type`                                 | 可選。在重設（resets）期間驅動機器人的遙操作器（teleoperator）                                                                             |
+| `--dataset.num_episodes`                        | 要錄製的回合數量                                                                                          |
+| `--dataset.episode_time_s`                      | 以秒為單位的每個錄製回合的時長。當 `--duration` 已設定而此項未設定時，預設為 `--duration` |
+| `--dataset.reset_time_s`                        | 以秒為單位的回合之間重設階段的時長                                                         |
+| `--teleop.type`                                 | 可選。在重設期間（reset phase）驅動機器人的遙操作器（teleoperator）                                                                             |
 | `--strategy.reset_to_initial_position`          | 是否在回合（episode）之間將機器人重設（reset）到其初始位置（initial position）                                                             |
-| `--strategy.smooth_leader_to_follower_handover` | 是否開啟或關閉主臂（leader）-> 從臂（follower）的平滑交接行為（smooth handover behavior）。                                                |
-| `--strategy.smooth_handover`                    | 在重設開始時平滑地將控制權移交給遙操作（teleop）（預設：true）。對於在接合時會以目前機器人姿勢重新建立參考的離合器式遙操作，請停用此選項   |
+| `--strategy.smooth_leader_to_follower_handover` | 是否開啟或關閉主臂（leader）-> 從臂（follower）的平滑交接行為。                                                |
+| `--strategy.smooth_handover`                    | 在重設開始時平滑地將控制權移交給遙操（預設：true）。對於在接合時會以目前機器人姿勢重新建立參考的離合器式遙操作（clutch-style teleops），請停用此選項   |
 
 ### 自帶策略（Bring your own strategy）[[bring-your-own-strategy]]
 
-`--strategy.type` 接受環境中註冊的任何策略（strategy），不限於上述內建項目。一個策略是位於可用 pip 安裝之套件中的兩個類別：一個註冊在 `RolloutStrategyConfig` 上的設定（config），以及一個名稱去掉 `Config` 尾綴的 `RolloutStrategy` 子類別 —— 與[自訂硬體（custom hardware）](./integrate_hardware#the-4-core-conventions)相同的 `SomethingConfig`/`Something` 慣例，會從設定所屬的模組或套件解析。
+`--strategy.type` 接受環境中註冊的任何策略（strategy），不限於上述內建項目。一個策略是位於可用 pip 安裝之套件中的兩個類別：一個註冊在 `RolloutStrategyConfig` 上的設定（config），以及一個名稱去掉 `Config` 尾綴的 `RolloutStrategy` 子類（subclass） —— 與[自訂硬體（custom hardware）](./integrate_hardware#the-4-core-conventions)相同的 `SomethingConfig`/`Something` 慣例，會從設定所屬的模組或套件解析。
 
 ```python
 from dataclasses import dataclass
@@ -234,7 +234,7 @@ class PatrolStrategy(RolloutStrategy):
         self._teardown_hardware(ctx.hardware, ctx.runtime.cfg.return_to_initial_position)
 ```
 
-設定（config）會宣告引擎要代策略（strategy）安排哪些事項，因此 LeRobot 中沒有任何部分需要知道它的型別：
+設定（config）會宣告引擎要為策略（strategy）安排哪些事項，因此 LeRobot 中沒有任何部分需要知道它的型別：
 
 | 宣告（declaration）             | 效果                                                                                                                             |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |

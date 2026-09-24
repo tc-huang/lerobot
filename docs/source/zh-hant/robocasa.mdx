@@ -82,7 +82,7 @@ export MUJOCO_GL=egl  # 用於無顯示的伺服器（HPC、雲端）
 
 以下所有評估程式碼片段（eval snippets）與 CI 指令一致（參見 `.github/workflows/benchmark_tests.yml`）。`--rename_map` 參數（parameter）將 RoboCasa 的原生攝影機鍵名（native camera keys, `robot0_agentview_left` / `robot0_eye_in_hand` / `robot0_agentview_right`）對應到已發佈的（released） `smolvla_robocasa` 策略訓練（policy training）時使用的三攝影機（`camera1` / `camera2` / `camera3`）輸入佈局（input layout）。
 
-預設情況下，每個任務會使用由 RoboCasa 註冊的 rollout 時程（horizon）。設定 `--env.episode_length=<steps>` 可將相同的明確時程套用至每個選取的任務。
+預設情況下，每個任務會使用由 RoboCasa 註冊的 rollout horizon。設定 `--env.episode_length=<steps>` 可將相同且明確的 horizon 套用至每個選取的任務。
 
 ### 單一任務評估（single-task evaluation，建議用於快速迭代）[[single-task-evaluation-recommended-for-quick-iteration]]
 

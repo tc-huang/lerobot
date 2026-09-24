@@ -1,4 +1,4 @@
-# π₀.₅（Pi05）策略[[-pi05-policy]]
+# π₀.₅ 策略[[-pi05-policy]]
 
 π₀.₅ 是一個**具備開放世界泛化能力的視覺-語言-動作模型（Vision-Language-Action model with open-world generalization）**，來自 Physical Intelligence。LeRobot 的實作改寫自他們的開源 [OpenPI](https://github.com/Physical-Intelligence/openpi) 儲存庫（repository）。
 
@@ -101,7 +101,7 @@ lerobot-train \
 
 **使用平均值/標準差正規化（mean/std normalization），而非 π₀.₅ 的[分位數預設值（quantile default）](#quantile-statistics)**——與 [pi05_libero_finetuned_v044](https://huggingface.co/lerobot/pi05_libero_finetuned_v044) 一致，下方結果即是在該檢查點（checkpoint）上測量所得。
 
-**`--policy.n_action_steps=10` 與 `--policy.empty_cameras=1` 必須明確指定**，因為 `--policy.pretrained_path` 僅載入權重——`lerobot/pi05_libero_base` 儲存了這兩項設定，否則它們會回退為 `50` 與 `0`（請參閱[載入檢查點（Loading a checkpoint）](#loading-a-checkpoint)）。
+**`--policy.n_action_steps=10` 與 `--policy.empty_cameras=1` 必須明確指定**，因為 `--policy.pretrained_path` 僅載入權重——`lerobot/pi05_libero_base` 儲存了這兩項設定，否則它們會回退為 `50` 與 `0`（請參閱[載入檢查點](#loading-a-checkpoint)）。
 
 接著使用 `lerobot-eval` 評估檢查點，並與參考成功率（success rates）比較——請參閱 [LIBERO](./libero)。
 
@@ -136,7 +136,7 @@ python src/lerobot/scripts/augment_dataset_quantile_stats.py \
     --skip-images
 ```
 
-`--skip-images` 會保留既有的影像統計量，並在只需重新計算 `STATE`/`ACTION` 時避免下載或解碼影片資料；而 `--root` 則會讀取本機資料集而非 Hub。這些值是直方圖估計值，會受到離散化與重新分箱（rebinning）誤差的影響，因此可能與保守值不同——這會改變 π₀.₅ 的正規化目標（normalized targets），進而改變其損失尺度（loss scale）。已儲存於現有檢查點內的統計量則不受影響。
+`--skip-images` 會保留既有的影像統計量，並在只需重新計算 `STATE`/`ACTION` 時避免下載或解碼影片資料；而 `--root` 則會讀取本機資料集而非 Hub。這些值是直方圖估計值，會受到離散化與重新分箱誤差（rebinning error）的影響，因此可能與保守值不同——這會改變 π₀.₅ 的正規化目標（normalized targets），進而改變其損失尺度（loss scale）。已儲存於現有檢查點內的統計量則不受影響。
 
 ### 訓練指令範例（training command example）[[training-command-example]]
 

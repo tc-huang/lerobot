@@ -305,9 +305,9 @@ lerobot-rollout \
 
 ---
 
-## 第 5 部分：SONIC 全身控制（潛在符元策略，Latent-Token Policies）[[part-5-sonic-whole-body-control-latent-token-policies]]
+## 第 5 部分：SONIC 全身控制（Latent-Token Policies）[[part-5-sonic-whole-body-control-latent-token-policies]]
 
-LeRobot 現在將 NVIDIA 的 [SONIC](https://github.com/NVIDIA/sonic) 全身部署堆疊的**解碼器**部分移植為 `SonicWholeBodyController`。策略不再直接命令關節，而是在每個控制週期輸出 64 維的**潛在動作符元（latent motion token）**（`motion_token.{i}.pos`）；SONIC 解碼器會將該符元加上近期的本體感覺歷史（proprioception history）映射為殘差動作（residual action），該動作經縮放後加到站立姿勢（standing pose）上，為全部 29 個自由度產生 50 Hz 的關節位置目標。
+LeRobot 現在將 NVIDIA 的 [SONIC](https://github.com/NVIDIA/sonic) 全身部署堆疊的**解碼器**部分移植為 `SonicWholeBodyController`。策略不再直接命令關節，而是在每個控制週期輸出 64 維的 **latent motion token**（`motion_token.{i}.pos`）；SONIC 解碼器會將該符元加上近期的本體感覺歷史（proprioception history）映射為殘差動作（residual action），該動作經縮放後加到站立姿勢（standing pose）上，為全部 29 個自由度產生 50 Hz 的關節位置目標。
 
 該控制器會從 [`lerobot/sonic_decoder`](https://huggingface.co/lerobot/sonic_decoder) 載入其 ONNX 解碼器與所有部署常數（PD 增益、`default_angles`、`action_scale` 以及中性符元）。該儲存庫也隨附一個蒸餾後的低延遲解碼器，可透過控制器的 `policy_type="low_latency"` 參數選用（預設為 `"default"`）。
 
@@ -377,7 +377,7 @@ python -m lerobot.async_inference.robot_client \
 
 - `--policy_device` 是*伺服器*載入策略所用的裝置——用戶端會在握手（handshake）期間傳送此資訊。
 - `--actions_per_chunk` 不得超過檢查點的區塊大小（`nepyope/sonic_walk` 為 50）。
-- 使用 `SonicWholeBodyController` 時，觀測狀態是 64 維符元回音（token echo），而不是 29 個關節位置，因此檢查點必須以相同的狀態進行訓練。
+- 使用 `SonicWholeBodyController` 時，觀測狀態是 64 維 token echo，而不是 29 個關節位置，因此檢查點必須以相同的狀態進行訓練。
 
 連線時，機器人會先讓每個關節平順地移動到解碼器的 `default_angles`，之後控制器才會接管，因此最初的策略命令不會從連線時的姿勢猛然跳動。
 

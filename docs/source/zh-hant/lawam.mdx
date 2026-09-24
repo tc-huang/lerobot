@@ -70,9 +70,9 @@ lerobot-eval \
   --eval.n_episodes=10
 ```
 
-Hub 儲存庫包含策略設定，以及完整的前處理器與後處理器管線，包括正規化張量與 LIBERO 夾爪處理。
+Hub 儲存庫包含策略設定（policy config），以及完整的前處理器與後處理器管線（preprocessor and postprocessor pipelines），包括正規化張量（normalization tensors）與 LIBERO 夾爪處理（gripper processing）。
 
-若要在已發布的 LIBERO SFT 檢查點上進行可重現的 LIBERO 基準測試執行，請在一次呼叫中評估所有套件與任務 ID：
+若要在已發布的 LIBERO SFT 檢查點上進行可重現的 LIBERO 基準測試執行，請在一次呼叫中，評估所有套件與任務 ID：
 
 ```bash
 lerobot-eval \
@@ -85,7 +85,7 @@ lerobot-eval \
   --output_dir=outputs/lawam_libero
 ```
 
-回報每個套件中全部 10 個任務的成功率。回報基準測試數字時，每個任務至少使用 50 個回合。
+回報每個套件中全部 10 個任務（tasks）的成功率（success rates）。回報基準測試數字時，每個任務至少使用 50 個回合（episodes）。
 
 已發布 LIBERO SFT 檢查點在每個任務 50 個回合下的參考結果。這些數字是以 MuJoCo 3.3.2 產生的。作為環境檢查，`libero_spatial` 任務 5 從 MuJoCo 3.8.1 的 18/50 次成功提升至 MuJoCo 3.3.2 的 47/50 次成功。
 
@@ -106,18 +106,18 @@ LaWAM 檢查點會明確儲存主要相機與手腕相機角色，而不是從 `
 --policy.wrist_image_features='["observation.images.wrist"]'
 ```
 
-`policy.lam_image_feature` 會選擇主要相機，其時間影格會由潛在動作模型取用。此欄位預設為第一個設定的主要相機，並在儲存策略設定時明確寫入。
+`policy.lam_image_feature` 會選擇主要相機，其時間影格（temporal frames）會由潛在動作模型（latent action model）取用。此欄位預設為第一個設定的主要相機，並在儲存策略設定時明確寫入。
 
 ## 執行階段欄位[[runtime-fields]]
 
-常見的 LaWAM 專用策略欄位：
+常見的 LaWAM 專用策略欄位（policy fields）：
 
 | 欄位              | 說明                                                                   |
 | ----------------- | ---------------------------------------------------------------------- |
 | `base_vlm`        | 儲存於已發布策略設定中的可攜式 Qwen/Qwen3-VL Hub 模型 ID。             |
-| `action_horizon`  | 每個區塊預測的動作數量，最多至 `chunk_size`。                          |
-| `flow_action_dim` | LaWAM Flow 頭部使用的內部填充動作維度。                                |
-| `flow_state_dim`  | LaWAM Flow 頭部使用的內部填充狀態維度。                                |
+| `action_horizon`  | 每個區塊（chunk）預測的動作數量，最多至 `chunk_size`。                          |
+| `flow_action_dim` | LaWAM flow head 使用的內部填充動作維度（internal padded action dimension）。                                |
+| `flow_state_dim`  | LaWAM flow head 使用的內部填充狀態維度（internal padded state dimension）。                                |
 | `embodiment_id`   | 當 LeRobot 資料集未提供具身（embodiment）ID 時所使用的 LaWAM 具身 ID。 |
 
 ## 引用[[citation]]

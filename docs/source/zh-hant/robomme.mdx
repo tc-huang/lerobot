@@ -1,6 +1,6 @@
 # RoboMME[[robomme]]
 
-[RoboMME](https://robomme.github.io) 是一個建構於 ManiSkill (SAPIEN) 上的記憶增強操作基準測試（memory-augmented manipulation benchmark）。它評估機器人在一個回合中保留與使用資訊的能力——計數、物體恆存性（object permanence）、參照與模仿。
+[RoboMME](https://robomme.github.io) 是一個建構於 ManiSkill (SAPIEN) 上的記憶增強操作基準測試（memory-augmented manipulation benchmark）。它評估機器人在一個回合中保留與使用資訊的能力——計數、物體恆存性（object permanence）、參照與模仿（reference and imitation）。
 
 - **16 個任務（tasks）**，橫跨 4 個記憶技能套件（memory-skill suites）
 - **1,600 個訓練示範（training demos）**（每個任務 100 個，50 個驗證 val，50 個測試 test）
@@ -30,7 +30,7 @@ pip install --override <(printf 'gymnasium==0.29.1\nnumpy==1.26.4\n') \
   'robomme @ git+https://github.com/RoboMME/robomme_benchmark.git@main'
 ```
 
-> **依賴注意事項（dependency note）**：`mani-skill`（由 `robomme` 拉取）固定使用 `gymnasium==0.29.1` 和 `numpy<2.0.0`，這與 lerobot 的基礎 `numpy>=2.0.0` 衝突。這就是為什麼 `robomme` 不是 pyproject 的額外依賴（extra）——請使用上述覆寫安裝方式，或使用下方的 Docker 方法以完全避免衝突。
+> **依賴注意事項（dependency note）**：`mani-skill`（由 `robomme` 拉取）固定使用 `gymnasium==0.29.1` 和 `numpy<2.0.0`，這與 lerobot 的基礎要求 `numpy>=2.0.0` 衝突。這就是為什麼 `robomme` 不是 pyproject 的額外依賴（extra）——請使用上述覆寫安裝方式，或使用下方的 Docker 方法以完全避免衝突。
 
 ### Docker（推薦）[[docker-recommended]]
 
@@ -93,16 +93,16 @@ dataset = LeRobotDataset("lerobot/robomme")
 
 ### 資料集特徵（dataset features）[[dataset-features]]
 
-| 特徵（feature）    | 形狀（shape） | 描述（description）                          |
-| ------------------ | ------------- | -------------------------------------------- |
-| `image`            | (256, 256, 3) | 前方相機 RGB（front camera RGB）             |
-| `wrist_image`      | (256, 256, 3) | 腕部相機 RGB（wrist camera RGB）             |
-| `actions`          | (8,)          | 關節角度 + 夾爪                              |
-| `state`            | (8,)          | 關節位置 + 夾爪狀態                          |
-| `simple_subgoal`   | str           | 高階語言標註                                 |
-| `grounded_subgoal` | str           | 語言錨定標註（grounded language annotation） |
-| `episode_index`    | int           | 回合 ID                                      |
-| `frame_index`      | int           | 回合內的影格索引                             |
+| 特徵（feature）    | 形狀（shape） | 描述（description）                                     |
+| ------------------ | ------------- | ------------------------------------------------------- |
+| `image`            | (256, 256, 3) | 前方攝影機 RGB（front camera RGB）                      |
+| `wrist_image`      | (256, 256, 3) | 腕部攝影機 RGB（wrist camera RGB）                      |
+| `actions`          | (8,)          | 關節角度（joint angles） + 夾爪（gripper）              |
+| `state`            | (8,)          | 關節位置（joint positions） + 夾爪狀態（gripper state） |
+| `simple_subgoal`   | str           | 高階語言標註（high-level language annotation）          |
+| `grounded_subgoal` | str           | 語言錨定標註（grounded language annotation）            |
+| `episode_index`    | int           | 回合 ID（episode ID）                                   |
+| `frame_index`      | int           | 回合內的影格索引（frame within episode）                |
 
 ### 訓練用特徵鍵對齊（feature key alignment, training）[[feature-key-alignment-training]]
 
@@ -130,4 +130,4 @@ dataset = LeRobotDataset("lerobot/robomme")
 - **僅支援 Linux**：ManiSkill 需要 SAPIEN/Vulkan。不支援 macOS 和 Windows。
 - **建議使用 GPU**：渲染可在 CPU 上執行但速度較慢；CUDA + Vulkan 可達到完整速度。
 - **gymnasium / numpy 衝突**：請參閱上方的安裝注意事項。Docker 映像會自動處理此問題。
-- **ManiSkill 分支**：`robomme` 依賴於特定的 ManiSkill 分支（fork，`YinpeiDai/ManiSkill`），會透過 `robomme` 套件自動拉取。
+- **ManiSkill 分支**：`robomme` 依賴於特定的 ManiSkill 分支（fork，`YinpeiDai/ManiSkill`），會透過 `robomme` 套件自動拉取（pull）。

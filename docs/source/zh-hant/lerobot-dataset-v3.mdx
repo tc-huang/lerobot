@@ -58,7 +58,7 @@ v3 的核心原則是**將儲存與使用者 API 解耦（decoupling storage fro
 
 1. **表格資料（tabular data）**：低維度（low‑dimensional）、高頻率的訊號（high‑frequency signals，狀態 state、動作 action、時間戳 timestamp）儲存於 **Apache Parquet**。存取方式為記憶體對映（memory-mapped）或透過 `datasets` 技術堆疊串流（streamed）。
 2. **視覺資料（visual data）**：相機影格（camera frames）串接後編碼（encoded）為 **MP4**。同一個回合（episode）的影格會被歸為一組；影片會依相機分片（shard）成實用的大小（practical size）。
-3. **元資料（metadata）**：以 JSON/Parquet 記錄描述結構定義（schema，特徵名稱 feature names、dtype、shape）、影格率（frame rate）、正規化統計（normalization stats），以及 **回合分段（episode segmentation）**（在共用 Parquet/MP4 檔案中的開始/結束偏移量 offset）。
+3. **元資料（metadata）**：以 JSON/Parquet 記錄描述結構定義（records describing schema，特徵名稱 feature names、dtype、shape）、影格率（frame rate）、正規化統計（normalization stats），以及 **回合分段（episode segmentation）**（在共用 Parquet/MP4 檔案中的開始/結束偏移量 offset）。
 
 > 為了擴展到數百萬個回合（episodes），多個回合的表格資料列（tabular rows）與影片影格（video frames）會**串接（concatenated）**成更大的檔案。回合特定的視圖（episode‑specific views）是**透過元資料（via metadata）**重建，而非檔案邊界（file boundaries）。
 
@@ -340,7 +340,7 @@ dataset.push_to_hub()
 Lance 是適用於多模態 AI 資料集（multimodal AI datasets）的實用格式，尤其適合需要高效能 IO 與隨機存取的大規模訓練（large-scale training）。
 
 `lerobot-lancedb` 套件實作了 `LeRobotLanceDataset`（用於 JPEG 影像）與 `LeRobotLanceVideoDataset`（用於 mp4 影片）。
-這兩種儲存布局皆繼承（subclass）自 LeRobotDataset，並可提供資料載入的加速。
+這兩種儲存布局皆繼承自 LeRobotDataset，並可提供資料載入的加速。
 
 `LeRobotLanceDataset` 是 `LeRobotDataset` 的即插即用（drop-in）替代品：
 

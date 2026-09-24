@@ -124,7 +124,7 @@ accelerate launch \
 `pretrained_model` 目錄（directory）或來自 Hub，請使用 `policy.path`。這會
 還原已儲存的 LeRobot 策略設定（policy config）、模型權重（model weights）、處理器（processor）與
 正規化統計量（normalization statistics）。您仍可覆寫訓練時的選項（override training-time options），例如
-`batch_size`、`steps` 或 `policy.action_mode`。檢查點載入（checkpoint loading）是嚴格的（strict），並會
+`batch_size`、`steps` 或 `policy.action_mode`。檢查點載入是嚴格的，並會
 保留已儲存的 FFT 或 LoRA 拓撲（topology），因此使用 `policy.path` 時請勿覆寫
 `policy.train_mode_vlm`。若要開始新的 LoRA 執行（run），
 請改為從 HF 權重（HF weights）以 `policy.checkpoint_path` 初始化（initialize），例如
@@ -197,7 +197,7 @@ accelerate launch \
   `10`。此 LeRobot 移植版（port）會以此值覆寫所載入檢查點的（checkpoint’s）
   `max_action_horizon`。
 - `policy.n_action_steps`：在再次查詢策略（querying the policy）之前，從每個預測
-  區塊（chunk）中實際取用的動作數量（number of actions consumed from each predicted chunk）。LIBERO 請將它設為 `chunk_size`。
+  區塊中實際取用的動作數量（number of actions consumed from each predicted chunk）。LIBERO 請將它設為 `chunk_size`。
 - `policy.setup_type`：插入提示詞（prompt）中用以描述機器人與
   場景（describe the robot and scene）的文字（text），例如 `single franka robotic arm in libero`。更多範例列於
   [`norm_stats.json`](https://huggingface.co/allenai/MolmoAct2/blob/main/norm_stats.json)

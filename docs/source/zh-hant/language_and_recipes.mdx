@@ -151,7 +151,7 @@ sample["target_message_indices"]
 
 `recipes/subtask_joint.yaml` 示範的是聯合序列訓練（joint sequence training），而非加權混合（weighted blend）。對同一個樣本（sample）而言，其助理子任務（assistant subtask）會在 `low_level` 串流（stream）上以文字交叉熵（text cross-entropy）進行監督，同時動作預測（action prediction）仍保持作用中（active），這與 π0.5 論文中的聯合設定（joint setup）相符。啟用 `--policy.joint_subtask_conditioning=true` 可在推論（inference）時使用該子任務條件（subtask conditioning）。
 
-## 優雅地處理缺席（graceful absence）[[graceful-absence]]
+## 優雅地處理缺失（graceful absence）[[graceful-absence]]
 
 若兩個語言欄位（language columns）皆缺失、為 `None` 或為空，`RenderMessagesStep` 會在可用時使用
 任務字串（task string）作為低階監督（low-level supervision），否則會讓樣本保持不變。對於已標註的樣本（annotated sample），若沒有適用的配方分支（recipe branch），且不存在任務後備（task fallback），渲染（rendering）會回傳 `None`，讓載入器（loader）可以重試另一個樣本（sample）。
