@@ -124,7 +124,7 @@ FastWAM 的 DiT 對所有注意力都使用 PyTorch 的 `scaled_dot_product_atte
 
 ### 編譯動作推論（Compiled Action Inference）[[compiled-action-inference]]
 
-FastWAM 可以編譯其影片預填充（video-prefill）與快取的動作去雜訊（cached action-denoising）圖形（graphs），以減少重複推論步驟中的 Python 與 CUDA 核心啟動額外負擔（kernel-launch overhead）：
+FastWAM 可以編譯其影片預填充（video-prefill）與快取的動作去雜訊圖形（cached action-denoising graphs），以減少重複推論步驟中的 Python 與 CUDA 核心啟動額外負擔（kernel-launch overhead）：
 
 ```bash
 --policy.compile_action_infer=true

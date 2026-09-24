@@ -65,7 +65,7 @@ python -m lerobot.async_inference.robot_client \
 重要的是，
 
 - `actions_per_chunk` 與 `chunk_size_threshold` 是需要為你的設定調校的關鍵參數（key parameters）。
-- `aggregate_fn_name` 是在重疊部分彙整動作（aggregate actions on overlapping portions）的函式（function）。你可以將新函式加入函式登錄表（registry），或在 `robot_client.py` 中加入你自己的（見[此處](https://github.com/huggingface/lerobot/blob/main/src/lerobot/async_inference/robot_client.py#L224)）
+- `aggregate_fn_name` 是在重疊部分彙整動作（aggregate actions on overlapping portions）的函式（function）。你可以將新函式加入函式登錄表（registry of functions），或在 `robot_client.py` 中加入你自己的（見[此處](https://github.com/huggingface/lerobot/blob/main/src/lerobot/async_inference/robot_client.py#L224)）
 - `debug_visualize_queue_size` 是調校 `CLIENT` 參數（parameters）的實用工具（tool）。
 
 ## 完成！您現在應該看到您的機器人開始活動了 😉[[done-you-should-see-your-robot-moving-around-by-now-]]

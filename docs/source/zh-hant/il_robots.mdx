@@ -431,7 +431,7 @@ Cadence summary — whole run, 2 episodes · target 30 Hz (33.3 ms budget per ti
   pacing headroom: 15.1 ms slept per tick on average (max 16.7 ms) — near zero means the loop is saturated
 ```
 
-在您使用該資料集（dataset）進行訓練之前，這份報告值得一讀。影格（frame）的時間戳記是從其索引推導而來，因此一個以 25 Hz 執行的工作階段，仍會產生一個*聲稱*為 30 的資料集——錄下來的動作單純就是比現實更快。在上面的例子中，`observe` 佔了迴圈工作量的 74%，而其 `worst` 為 40 ms，預算卻只有 33.3 ms：正是攝影機（camera）導致那 16 個 tick 超支。**步調餘裕（pacing headroom）**接近零，代表已經沒有多餘空間可以吸收一次緩慢的 tick。
+在您使用該資料集（dataset）進行訓練之前，這份報告值得一讀。影格的時間戳記（frame’s timestamp）是從其索引推導而來，因此一個以 25 Hz 執行的工作階段，仍會產生一個*聲稱*為 30 的資料集——錄下來的動作單純就是比現實更快。在上面的例子中，`observe` 佔了迴圈工作量的 74%，而其 `worst` 為 40 ms，預算卻只有 33.3 ms：正是攝影機（camera）導致那 16 個 tick 超支。**步調餘裕（pacing headroom）**接近零，代表已經沒有多餘空間可以吸收一次緩慢的 tick。
 
 回合（episode）之間的重置階段（reset phases）以相同方式調節步調，但刻意不計入這些數字，因為它們不會錄製任何內容。`lerobot-teleoperate` 與 `lerobot-replay` 也以相同方式回報，而 `lerobot-rollout` 則會額外加入 [節奏回報（Cadence Reporting）](./inference#cadence-reporting) 中所述的插值專屬（interpolation-specific）資訊列。
 

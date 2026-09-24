@@ -241,7 +241,7 @@ class PatrolStrategy(RolloutStrategy):
 | `dataset_mode`                  | `"none"`（預設）會拒絕 `--dataset.*` 旗標，`"optional"` 在提供這些旗標時進行錄製，`"required"` 則讓 `--dataset.repo_id` 成為必填 |
 | `requires_teleop`               | 讓 `--teleop.type` 成為必填                                                                                                      |
 | `supports_interactive`          | 允許 `--interactive=true`；此時 `run()` 必須遵守記錄在 `RolloutStrategy` 上的可重新啟動契約                                      |
-| `requires_streaming_encoding()` | 當影格（frame）是從控制迴圈內部寫入時回傳 `True`：`--dataset.streaming_encoding` 會被強制開啟                                    |
+| `requires_streaming_encoding()` | 當影格（frames）是從控制迴圈內部寫入時回傳 `True`：`--dataset.streaming_encoding` 會被強制開啟                                    |
 | `extra_dataset_features()`      | 策略擁有的資料集欄位（例如 DAgger 的 `intervention`）；每個錄製的影格都必須帶有這些欄位                                          |
 
 將發行版（distribution）命名為 `lerobot_strategy_<name>`，`lerobot-rollout` 便會在解析 CLI 之前匯入該套件 —— 只會執行其 `__init__.py`，因此請在該處匯入設定（config）。若套件名稱不同，可使用 `--strategy.discover_packages_path=<package>` 載入該套件（包含子模組）。策略的 dataclass 欄位會變成 `--strategy.*` 旗標：
@@ -298,7 +298,7 @@ lerobot-rollout \
 | `--inference.rtc.mode`                      | `guided`（預設）或用於相容 Pi05 檢查點的已訓練前綴（trained-prefix）`trained`            |
 | `--inference.rtc.max_guidance_weight`       | 一致性強制的強度（consistency enforcement strength，預設：依策略 policy 而異）           |
 | `--inference.rtc.prefix_attention_schedule` | 混合排程（blend schedule）：`LINEAR`、`EXP`、`ONES`、`ZEROS`                             |
-| `--inference.queue_threshold`               | 背壓（backpressure）閾值；已訓練的 RTC 至少需要其最大延遲                                |
+| `--inference.queue_threshold`               | 背壓閾值（backpressure threshold）；已訓練的 RTC 至少需要其最大延遲                                |
 
 調校 RTC 參數（parameters）的細節請參閱[即時分塊（Real-Time Chunking）](./rtc)指南。
 
@@ -322,28 +322,13 @@ lerobot-rollout \
 | 指令（command）     | 動作（action）                                                                                                          |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `/start`            | 開始（或重新開始）策略控制迴圈                                                                                          |
-| `/subtask <text>`   | 在不停止的情況下變更策略遵循的指令。不帶引數時會印出目前的任務。只會影響以語言為條件的策略（SmolVLA、π0/π0.5 等類似者） |
-| `/vqa <text>`       | 針對策略目前所見向它提問。僅在執行進行中可用，且僅適用於具有文字頭（text head）的策略                                   |
+| `/subtask <text>`   | 在不停止的情況下變更策略遵循的指令（instruction）。不帶引數時會印出目前的任務。只會影響以語言為條件的策略（SmolVLA、π0/π0.5 等類似者） |
+| `/vqa <text>`       | 針對策略目前所見向它提問。僅在執行進行中可用，且僅適用於具有 text head 的策略                                   |
 | `/autosteer <goal>` | 交給策略一個高階目標，讓它自行選擇子任務。`/autosteer off` 會交還控制權；不帶引數時會回報目前的目標                     |
 | `/reset`            | 停止移動、將機器人返回其啟動位置，並還原 `--task` 指令                                                                  |
 | `/stop`             | 結束工作階段並執行一般的關閉程序                                                                                        |
 | `/help`             | 列出指令                                                                                                                |
 
-```text
-> /start
-Rollout 正在執行 —— 任務「pick up the cube」。使用 /subtask <text> 變更，...
-> /subtask put the cube in the box
-任務：「pick up the cube」→「put the cube in the box」（從下一次策略推論起生效）
-> /vqa is the cube inside the box?
-已提問：「is the cube inside the box?」—— 將從下一次觀測開始回答...
-Q: is the cube inside the box?
-A: 否 —— 方塊在桌上，位於箱子的左側。
-> /reset
-任務已還原為「pick up the cube」
-正在重設 —— 將機器人返回其初始位置...
-機器人已重設 —— 保持在初始位置。輸入 /start 開始執行。
-> /stop
-```
 
 以 `>` 開頭的行是你輸入的內容；工作階段本身不會顯示提示符號。
 
@@ -353,13 +338,13 @@ A: 否 —— 方塊在桌上，位於箱子的左側。
 (printf '/start\n'; sleep 60; printf '/stop\n') | lerobot-rollout ... --interactive=true
 ```
 
-**`/subtask`** 會從下一次推論（inference）起生效。使用 `--inference.type=sync` 時，預先計算好的區塊動作（chunk actions）會被丟棄，因此切換會落在下一個控制刻（control tick）；使用 `rtc` 時，新區塊會與前一區塊剩餘的前綴（prefix）混合，因此會在單次推論內生效，動作也保持連續（使用 `--inference.rtc.enabled=false` 時，佇列中的區塊會先耗盡，使切換延遲最多一個區塊）。
+**`/subtask`** 會從下一次推論（inference）起生效。使用 `--inference.type=sync` 時，預先計算好的區塊動作（chunk actions）會被丟棄，因此切換會落在下一個控制刻（control tick）；使用 `rtc` 時，新區塊會與前一區塊剩餘的前綴（leftover prefix）混合，因此會在單次推論內生效，動作也保持連續（使用 `--inference.rtc.enabled=false` 時，佇列中的區塊會先耗盡，使切換延遲最多一個區塊）。
 
 使用 `--use_torch_compile=true` 時，若某個指令 tokenize 後的長度不同，可能觸發重新編譯（recompilation），使推論暫停與原本暖機（warm-up）一樣長的時間 —— 若你預期會經常重新下指令，請保持關閉編譯。
 
-`/vqa` 與 `/autosteer` 需要具有文字頭（text head）的策略（policy，即 `PreTrainedPolicy.generate_text()` 的實作）；目前內建的 LeRobot 策略尚未提供，因此除非你的策略有，否則這兩個指令都會被拒絕。
+`/vqa` 與 `/autosteer` 需要具有 text head 的策略（即 `PreTrainedPolicy.generate_text()` 的實作）；目前內建的 LeRobot 策略尚未提供，因此除非你的策略有，否則這兩個指令都會被拒絕。
 
-**`/vqa`** 會依據下一次觀測（observation）作答，並在就緒時輸出，因此你可以同時繼續輸入；同一時間只會有一個問題在處理中（autosteer 自己的查詢會共用該位置）。文字生成遠比一個控制刻（control tick）慢，因此機器人會先消化佇列中的動作，然後保持位置直到答案產生，而這段時間會計入 `--duration`。只有在執行進行中才會接受提問 —— 閒置的引擎沒有目前的視野 —— 而當某個區段（segment）結束時仍未回答的問題會被丟棄並回報。
+**`/vqa`** 會依據下一次觀測（observation）作答，並在就緒時輸出，因此你可以同時繼續輸入；同一時間只會有一個問題在處理中（autosteer 自己的查詢會共用該 slot）。文字生成遠比一個控制刻（control tick）慢，因此機器人會先消化佇列中的動作，然後保持位置直到答案產生，而這段時間會計入 `--duration`。只有在執行進行中才會接受提問 —— 閒置的引擎沒有目前的視野 —— 而當某個區段（segment）結束時仍未回答的問題會被丟棄並回報。
 
 **`/autosteer`** 會交給策略一個目標，並每隔 `--autosteer_interval_s` 秒（預設 10）向它索取下一個子任務，透過與 `/subtask` 相同的路徑套用每個子任務，並在對話中公告。每個查詢都是一次完整的文字生成，因此該間隔是成本的調節旋鈕：較低的值會更早重新規劃，但會讓迴圈花更多時間在生成文字而非採取行動。計畫進度存在於策略（policy）中，而非 rollout 中，因此計畫會隨著區段結束而消失；序列器（sequencer）也會在 `/reset`、`/subtask`、`/autosteer off` 以及第一次規劃失敗時停止。
 
@@ -415,7 +400,7 @@ serve_thread.join()
 strategy.teardown(ctx)  # 收尾（teardown）仍由呼叫端負責
 ```
 
-`RolloutController` 要求情境（context）的關閉事件必須是 `LinkedEvent`，並如上所示建構：控制器會透過其本機旗標結束執行區段，而你的 `parent` 事件仍會強制執行完整關閉。除非你想要語音公告，否則請設定 `play_sounds=False`。
+`RolloutController` 要求情境的關閉事件（context’s shutdown event）必須是 `LinkedEvent`，並如上所示建構：控制器會透過其本機旗標結束執行區段，而你的 `parent` 事件仍會強制執行完整關閉。除非你想要語音公告（vocal announcements），否則請設定 `play_sounds=False`。
 
 ---
 

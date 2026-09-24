@@ -62,7 +62,7 @@ wall_clock ≈ total_steps × per_step_time
 | `smolvla`      | 27 分 49 秒  |      0.312 |           0.011 | ~80%               | `--policy.path=lerobot/smolvla_base`、`freeze_vision_encoder=false`、`train_expert_only=false`                                                                           |
 | `pi05`         | 3 小時 41 分 |      2.548 |           0.014 | ~95%               | `--policy.pretrained_path=lerobot/pi05_base`、`gradient_checkpointing=true`、`dtype=bfloat16`，訓練（training）視覺編碼器（vision encoder） + 專家模組（expert trained） |
 
-訓練日誌（training logs）會將完整迭代（full iteration）拆分為 `dataloading_s`（`next(dl_iter)`）、`preprocessing_s`（影像轉換與策略管線）以及 `update_s`（優化器更新）。`step_s` 涵蓋這三者，並且是 `samples_per_s` 的計算依據。上方的基準測試早於這項拆分，因此其 `dataloading_s` 包含前處理。
+訓練日誌（training logs）會將完整迭代（full iteration）拆分為 `dataloading_s`（`next(dl_iter)`）、`preprocessing_s`（影像轉換與策略管線）以及 `update_s`（優化器更新）。`step_s` 涵蓋這三者，並且是 `samples_per_s` 的計算依據。上方的基準測試早於這項拆分，因此其 `dataloading_s` 包含前處理（preprocessing）。
 
 ### 排程與檢查點（schedule and checkpoints）[[schedule-and-checkpoints]]
 
