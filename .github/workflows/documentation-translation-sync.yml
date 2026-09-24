@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     # Being killed here leaves the same partial state as a cancellation, so raise this before a
     # full-tree run ever gets close to it.
-    timeout-minutes: 120
+    timeout-minutes: 300
     # No job-level permissions: every write goes through TRANSLATION_PR_TOKEN, so GITHUB_TOKEN
     # never needs more than the workflow-level `contents: read` that checkout reads with.
     env:
