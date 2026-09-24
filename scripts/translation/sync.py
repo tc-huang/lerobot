@@ -16,6 +16,9 @@ import argparse
 import json
 import os
 import subprocess
+import sys
+import time
+import traceback
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
@@ -24,7 +27,6 @@ from pathlib import Path
 import yaml
 from huggingface_hub import InferenceClient
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
-from tqdm import tqdm
 
 COMMIT_FORMAT = "%H%x09%cI"
 TOCTREE_FILE_NAME = "_toctree.yml"
@@ -604,14 +606,17 @@ class TranslationPipeline:
         self, file_names: list[str], desc: str, run_doc: Callable[[str], DocOutcome]
     ) -> list[DocOutcome]:
         outcomes: list[DocOutcome] = []
-        progress = tqdm(file_names, desc=desc, unit="doc", disable=None)
-        for file_name in progress:
-            progress.set_postfix_str(file_name)
+        for index, file_name in enumerate(file_names, start=1):
+            print(f"{desc} [{index}/{len(file_names)}] {file_name}", file=sys.stderr)
+            started = time.monotonic()
             try:
-                outcomes.append(run_doc(file_name))
+                outcome = run_doc(file_name)
             except Exception as error:  # one page must never take the whole run down
-                tqdm.write(f"{file_name}: {error!r}")
-                outcomes.append(self._errored_doc(file_name, error))
+                print(traceback.format_exc(), end="", file=sys.stderr)
+                outcome = self._errored_doc(file_name, error)
+            attempts = f" ({outcome.attempts} attempts)" if outcome.attempts else ""
+            print(f"  {outcome.action} in {time.monotonic() - started:.0f}s{attempts}", file=sys.stderr)
+            outcomes.append(outcome)
         return outcomes
 
     def _remove_doc(self, file_name: str) -> DocOutcome:
