@@ -53,21 +53,31 @@ Preview deployment: <{{ preview_url }}/>
 #### Resolve the stale pages
 
 These still serve the translation from before this run.
-[Needs attention](#needs-attention) shows how far behind each one is.
-
+[Needs attention](#needs-attention) counts the commits each one is behind; for a page translated
+before, the block below carries the `git diff` for what moved.
 {% for doc in needs_attention %}
-- {{ doc.emoji }} `{{ doc.name }}` — {{ doc.current }} · {{ doc.english }}
-{% endfor %}
-{% for doc in errors %}
+{% if doc.error or doc.command %}
 
 <details>
-<summary>💥 <code>{{ doc.name }}</code> — error</summary>
+<summary>{{ doc.emoji }} <code>{{ doc.name }}</code> — {{ doc.current_html }} · {{ doc.english_html }}{% if doc.changed %} — <code>{{ doc.change_plain }}</code>{% endif %}</summary>
+{% if doc.error %}
 
 ```text
 {{ doc.error }}
 ```
+{% endif %}
+{% if doc.command %}
+
+```bash
+{{ doc.command }}
+```
+{% endif %}
 
 </details>
+{% else %}
+
+- {{ doc.emoji }} `{{ doc.name }}` — {{ doc.current }} · {{ doc.english }}
+{% endif %}
 {% endfor %}
 {% endif %}
 {% if read_in_full %}
