@@ -59,7 +59,7 @@ before, the block below carries the `git diff` for what moved.
 {% if doc.error or doc.command %}
 
 <details>
-<summary>{{ doc.emoji }} <code>{{ doc.name }}</code> — {{ doc.current_html }} · {{ doc.english_html }}{% if doc.changed %} — <code>{{ doc.change_plain }}</code>{% endif %}</summary>
+<summary>{{ doc.emoji }} <code>{{ doc.name }}</code> — {% if doc.published %}{{ doc.current_html }} · {% endif %}{{ doc.english_html }}{% if doc.changed %} — <code>{{ doc.change_plain }}</code>{% endif %}</summary>
 {% if doc.error %}
 
 ```text
@@ -76,7 +76,7 @@ before, the block below carries the `git diff` for what moved.
 </details>
 {% else %}
 
-- {{ doc.emoji }} `{{ doc.name }}` — {{ doc.current }} · {{ doc.english }}
+- {{ doc.emoji }} `{{ doc.name }}` — {% if doc.published %}{{ doc.current }} · {% endif %}{{ doc.english }}
 {% endif %}
 {% endfor %}
 {% endif %}
