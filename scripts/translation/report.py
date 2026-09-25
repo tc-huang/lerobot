@@ -71,8 +71,9 @@ class DocView:
     emoji: str  # what happened to the page, or 💥 when it raised
     preview: str  # link to the page in this run's deployment, "—" once the page is removed
     preview_html: str  # the same link as an anchor, for the <summary> line that keeps markdown literal
-    current: str  # link to the page as the last run published it
+    current: str  # link to the page as the last run published it, "—" for a page never translated
     current_html: str  # the same link as an anchor, for the <summary> line
+    published: bool  # whether a previous translation is live, so the current link leads somewhere
     english: str  # link to the English page built for this run, "—" once the page is removed
     english_html: str  # the same link as an anchor, again for the <summary> line
     translated_from: str  # commit link for the English this translation was made from
@@ -113,13 +114,16 @@ def _doc_view(doc: dict, urls: SiteUrls, lang_name: str, inlined: bool) -> DocVi
     commits = doc["commits_since"]
     preview_url = None if removed else f"{urls.preview}/{name}"
     english_url = None if removed else f"{urls.english}/{name}"
+    # a page never translated before has nothing published to link to yet
+    current_url = f"{urls.current}/{name}" if doc["translated_from"] else None
     return DocView(
         name=name,
         emoji=ERROR_EMOJI if doc["error"] else ACTION_EMOJI[action],
         preview=_link(lang_name, preview_url),
         preview_html=_html_link(lang_name, preview_url),
-        current=_link(lang_name, f"{urls.current}/{name}"),
-        current_html=_html_link(lang_name, f"{urls.current}/{name}"),
+        current=_link(lang_name, current_url),
+        current_html=_html_link(lang_name, current_url),
+        published=current_url is not None,
         english=_link("English", english_url),
         english_html=_html_link("English", english_url),
         translated_from=_commit(doc["translated_from"], urls.repo),
