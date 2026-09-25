@@ -193,6 +193,8 @@
 - sections:
   - local: contributing
     title: 貢獻至 LeRobot
+  - local: writing_docstrings
+    title: 撰寫 docstring（Writing docstrings）
   - local: backwardcomp
     title: 向下相容性（Backward compatibility）
   title: 關於（About）
