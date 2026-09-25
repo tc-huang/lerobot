@@ -7,7 +7,7 @@
 
 外掛路徑通常是正確的起點；等策略穩定、且將它隨函式庫一起發布有明確價值時，再升級為 in-tree。
 
-無論哪一種，基礎構件都相同：一個配置類（configuration class）、一個策略類（policy class），以及一個處理器工廠（processor factory）。本指南前半部涵蓋這些共用元件，後半部涵蓋各路徑專屬的架構（見下方 [Path A](#path-a%E6%A8%B9%E5%A4%96%E5%A4%96%E6%8E%9Bout-of-tree-plugin) 與 [Path B](#path-bin-tree-%E8%B2%A2%E7%8D%BBcontributing-in-tree)）。
+無論哪一種，基礎構件都相同：一個配置類（configuration class）、一個策略類（policy class），以及一個處理器工廠（processor factory）。本指南前半部涵蓋這些共用元件，後半部涵蓋各路徑專屬的架構（見下方 [Path A](#path-a-out-of-tree-plugin) 與 [Path B](#path-b-contributing-in-tree)）。
 
 關於語氣的說明：機器人學習是一個持續演進的領域，「策略長什麼樣子」可能隨每個新架構而改變。此處描述的慣例之所以存在，是因為它們能讓 `lerobot-train` 與 `lerobot-eval` 在差異極大的模型間一致運作。當某個新策略確實不符合這些慣例時，請提出來（在您的 PR 或 issue 中），這些慣例並非不可更動。
 
@@ -274,7 +274,7 @@ class MyPolicy(PreTrainedPolicy):
 
 ---
 
-## Path A：樹外外掛（out-of-tree plugin）
+## Path A：樹外外掛（out-of-tree plugin）[[path-a-out-of-tree-plugin]]
 
 要發布策略最快的方式：把它打包（package）成獨立的 Python 發行套件（standalone Python distribution），並與 LeRobot 一起安裝。不需 PR、您自己掌握發布週期（release cycle），也可以用自己的命名空間（namespace）發布到 PyPI。
 
@@ -356,7 +356,7 @@ lerobot-train \
 
 ---
 
-## Path B：in-tree 貢獻（contributing in-tree）
+## Path B：in-tree 貢獻（contributing in-tree）[[path-b-contributing-in-tree]]
 
 當您的策略（policy）已經穩定、且將它隨函式庫一起發布有明確價值時，您可以讓它直接進入 LeRobot。請先閱讀一般性的[貢獻指南](./contributing)與 [PR 模板](https://github.com/huggingface/lerobot/blob/main/.github/PULL_REQUEST_TEMPLATE.md)，那裡列出了每個 PR 都必須符合的測試／品質（testing/quality）要求（`pre-commit run -a`、`pytest`、社群審查規則等）。以下是在這些要求之上、策略專屬（policy-specific）的部分。
 
