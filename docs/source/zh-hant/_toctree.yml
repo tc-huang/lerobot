@@ -38,7 +38,7 @@
   - local: lerobot-dataset-v3
     title: 使用 LeRobotDataset
   - local: porting_datasets_v3
-    title: 移轉大型資料集（Porting Large Datasets）
+    title: 移植大型資料集（Porting Large Datasets）
   - local: using_dataset_tools
     title: 使用資料集工具
   - local: language_and_recipes
@@ -198,3 +198,23 @@
   - local: backwardcomp
     title: 向下相容性（Backward compatibility）
   title: 關於（About）
+- sections:
+  - local: api/robots
+    title: 機器人（Robots）
+  - local: api/teleoperators
+    title: 遙操作器（Teleoperators）
+  - local: api/cameras
+    title: 相機（Cameras）
+  - local: api/motors
+    title: 馬達（Motors）
+  - local: api/datasets
+    title: 資料集（Datasets）
+  - local: api/policies
+    title: 策略（Policies）
+  - local: api/processor
+    title: 處理器（Processors）
+  - local: api/envs
+    title: 環境（Environments）
+  - local: api/configs
+    title: 設定（Configuration）
+  title: API 參考

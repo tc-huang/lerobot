@@ -222,7 +222,7 @@
     },
     "porting_datasets_v3.mdx": {
       "source_version": "b2c3c15a0a991dc6fe7b7fd0c6643d6a6b6bca1d",
-      "title": "移轉大型資料集（Porting Large Datasets）"
+      "title": "移植大型資料集（Porting Large Datasets）"
     },
     "processors_robots_teleop.mdx": {
       "source_version": "359b37aff3a1582b828167524e6f74cae7b7c2f8",
@@ -338,6 +338,7 @@
     }
   },
   "section_titles": {
+    "API Reference": "API 參考",
     "About": "關於（About）",
     "Benchmarks": "基準測試（Benchmarks）",
     "Compute & Hardware": "運算與硬體（Compute & Hardware）",
