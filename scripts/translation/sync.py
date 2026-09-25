@@ -593,13 +593,25 @@ class TranslationPipeline:
 
     def _errored_doc(self, file_name: str, error: Exception) -> DocOutcome:
         translated_from = self._target_docs.get_translated_commit(file_name)
+        diff_stat, source_diff = None, None
+        # the diff only enriches the report, so failing to get it must not escape _run_docs
+        try:
+            old_version = self._target_docs.get_last_translated_version(file_name)
+            if old_version is not None and file_name in self._source_docs.file_names:
+                diff_stat = self._source_docs.get_diff_stat(file_name, old_version)
+                source_diff = self._source_docs.get_diff(file_name, old_version)
+        except Exception as diff_error:
+            print(f"  no English diff for {file_name}: {diff_error!r}", file=sys.stderr)
+            diff_stat, source_diff = None, None
         return DocOutcome(
             file_name,
             DocAction.SKIPPED,
             error=repr(error),
+            diff_stat=diff_stat,
             commits_since=self._source_docs.count_commits_since(file_name, translated_from),
             translated_from=translated_from,
             english_now=self._source_docs.get_current_commit(file_name),
+            source_diff=source_diff,
         )
 
     def _run_docs(

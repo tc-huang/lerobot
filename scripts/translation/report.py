@@ -72,10 +72,12 @@ class DocView:
     preview: str  # link to the page in this run's deployment, "—" once the page is removed
     preview_html: str  # the same link as an anchor, for the <summary> line that keeps markdown literal
     current: str  # link to the page as the last run published it
+    current_html: str  # the same link as an anchor, for the <summary> line
     english: str  # link to the English page built for this run, "—" once the page is removed
     english_html: str  # the same link as an anchor, again for the <summary> line
     translated_from: str  # commit link for the English this translation was made from
     english_now: str  # commit link for the English as this run found it
+    changed: bool  # whether there is an English diff stat to show at all
     change: str  # the English diff stat, backquoted for a table cell
     change_plain: str  # the same stat unquoted, for the <summary> line
     behind: str  # how much English moved between those two commits, in commits and in lines
@@ -117,10 +119,12 @@ def _doc_view(doc: dict, urls: SiteUrls, lang_name: str, inlined: bool) -> DocVi
         preview=_link(lang_name, preview_url),
         preview_html=_html_link(lang_name, preview_url),
         current=_link(lang_name, f"{urls.current}/{name}"),
+        current_html=_html_link(lang_name, f"{urls.current}/{name}"),
         english=_link("English", english_url),
         english_html=_html_link("English", english_url),
         translated_from=_commit(doc["translated_from"], urls.repo),
         english_now=_commit(doc["english_now"], urls.repo, "removed in " if removed else ""),
+        changed=bool(stat),
         change=change,
         change_plain=change_plain,
         behind=f"{plural(commits, 'commit')}, {change}" if commits else change,
@@ -207,7 +211,6 @@ def build_context(report: dict, urls: SiteUrls, inlined: set[str]) -> dict:
         "pages": views["updated"] + views["added"] + views["removed"],
         "read_in_full": views["added"],
         "changes": views["updated"],
-        "errors": [view for view in views["skipped"] if view.error],
         "counts": {action: len(group) for action, group in views.items()},
         "to_review": _to_review(len(views["skipped"]), len(views["added"]), len(views["updated"])),
     }
