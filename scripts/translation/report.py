@@ -105,7 +105,7 @@ def _commit(commit: dict | None, repo_url: str, prefix: str = "") -> str:
 
 
 def _doc_view(doc: dict, urls: SiteUrls, lang_name: str, inlined: bool) -> DocView:
-    name = Path(doc["file_name"]).stem
+    name = Path(doc["file_name"]).with_suffix("").as_posix()
     action, removed = doc["action"], doc["action"] == "removed"
     source_diff = doc["source_diff"]
     stat = doc["diff_stat"]
@@ -165,7 +165,7 @@ def _diffable(docs: list[dict]) -> list[dict]:
 def _summary_rows(docs: list[dict]) -> list[dict]:
     rows = []
     for action, label in ACTION_LABEL.items():
-        names = [Path(doc["file_name"]).stem for doc in docs if doc["action"] == action]
+        names = [Path(doc["file_name"]).with_suffix("").as_posix() for doc in docs if doc["action"] == action]
         listed = ", ".join(f"`{name}`" for name in names) if names and action != "unchanged" else "—"
         rows.append(
             {

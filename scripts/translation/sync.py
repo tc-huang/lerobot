@@ -48,11 +48,12 @@ def write_text(text_path: Path, text: str) -> None:
 
 
 def doc_paths(doc_dir: Path) -> list[Path]:
-    return list(doc_dir.glob("*.mdx"))
+    nested_roots = {path.parent for path in doc_dir.rglob(TOCTREE_FILE_NAME)} - {doc_dir}
+    return [path for path in doc_dir.rglob("*.mdx") if nested_roots.isdisjoint(path.parents)]
 
 
 def doc_file_names(doc_dir: Path) -> set[str]:
-    return {path.name for path in doc_paths(doc_dir)}
+    return {path.relative_to(doc_dir).as_posix() for path in doc_paths(doc_dir)}
 
 
 def page_locals(doc_dir: Path) -> set[str]:
@@ -134,7 +135,7 @@ class Toctree:
         return yaml.safe_load(read_text(self._toctree_path)) or []
 
     def _find(self, doc_file_name: str) -> tuple[dict | None, dict | None]:
-        local = Path(doc_file_name).stem
+        local = Path(doc_file_name).with_suffix("").as_posix()
         for section in self._toctree:
             for entry in section["sections"]:
                 if entry["local"] == local:
@@ -251,24 +252,23 @@ class TranslationRecord:
         record = (
             json.loads(read_text(self._record_path))
             if self._record_path.exists()
-            else self._build(doc_lang_toctree)
+            else {"docs": {}, "section_titles": {}}
         )
         self._docs = record["docs"]
         self._section_titles = record["section_titles"]
+        self._adopt_untracked(doc_lang_toctree)
 
-    def _build(self, doc_lang_toctree: Toctree) -> dict:
-        docs = {}
-        section_titles = {}
-        for file_name in sorted(self._source_docs.file_names & doc_file_names(self._doc_lang_dir)):
+    def _adopt_untracked(self, doc_lang_toctree: Toctree) -> None:
+        translated = self._source_docs.file_names & doc_file_names(self._doc_lang_dir)
+        for file_name in sorted(translated - self._docs.keys()):
             doc_lang_titles = doc_lang_toctree.get_section_and_doc_title(file_name)
-            docs[file_name] = {
+            self._docs[file_name] = {
                 "source_version": self._source_docs.get_translated_version(self._doc_lang_dir, file_name),
                 "title": doc_lang_titles[1] if doc_lang_titles else None,
             }
             doc_en_titles = self._source_docs.get_section_and_doc_title(file_name)
             if doc_en_titles is not None and doc_lang_titles is not None:
-                section_titles[doc_en_titles[0]] = doc_lang_titles[0]
-        return {"docs": docs, "section_titles": section_titles}
+                self._section_titles.setdefault(doc_en_titles[0], doc_lang_titles[0])
 
     def get_last_translated_version(self, doc_file_name: str) -> str | None:
         return self._docs.get(doc_file_name, {}).get("source_version")
@@ -327,7 +327,9 @@ class TargetDocs(Docs):
         self._record.save()
 
     def _write(self, doc_file_name: str, doc_content: str) -> None:
-        write_text(self._doc_dir / doc_file_name, doc_content)
+        doc_path = self._doc_dir / doc_file_name
+        doc_path.parent.mkdir(parents=True, exist_ok=True)
+        write_text(doc_path, doc_content)
 
     def _remove(self, doc_file_name: str) -> None:
         doc_path = self._doc_dir / doc_file_name
@@ -732,7 +734,10 @@ def main():
     parser.add_argument("--model", type=str, required=True)
     parser.add_argument("--base_url", type=str, required=True)
     parser.add_argument(
-        "--select", nargs="+", metavar="FILE_NAME", help="doc file names to process, defaults to all"
+        "--select",
+        nargs="+",
+        metavar="FILE_NAME",
+        help="doc file names relative to docs/source, e.g. api/robots.mdx, to process; defaults to all",
     )
     parser.add_argument("--report", type=Path, help="write the run report as JSON to this path")
 
