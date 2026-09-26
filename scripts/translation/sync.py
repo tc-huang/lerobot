@@ -31,7 +31,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 COMMIT_FORMAT = "%H%x09%cI"
 TOCTREE_FILE_NAME = "_toctree.yml"
 RECORD_FILE_NAME = "translation-record.json"
-LANG_TAG2NAME = {"zh-hant": "Traditional Chinese"}
+LANG_TAG2NAME = {"zh-hans": "Simplified Chinese", "zh-hant": "Traditional Chinese"}
 TRANSLATION_PROMPT_TEMPLATE_NAME = "prompt.md.jinja"
 TRANSLATION_PROMPT_TEMPLATE_DIR = Path(__file__).parent
 LINE_COUNT_TOLERANCE = 10
