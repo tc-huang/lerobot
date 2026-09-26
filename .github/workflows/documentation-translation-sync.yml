@@ -63,12 +63,13 @@ jobs:
     steps:
       - name: Resolve target language
         run: |
-          lang_tag="${GITHUB_REF_NAME#docs/i18n-}"
+          branch_tag="${GITHUB_REF_NAME#docs/i18n-}"
+          lang_tag="$branch_tag"
           # doc-builder's kit only recognises a language segment shaped xx or xx-YY
           # (kit/src/lib/hfDocPaths.js), so a script subtag like zh-hant cannot be passed
           # through: every internal link would carry a doubled language segment. This row is
           # the one thing about a language that cannot be derived from its branch name.
-          case "$lang_tag" in
+          case "$branch_tag" in
             zh-hant) doc_builder_language=zh-TW ;;
             # Scratch branch for testing this workflow against the same language. Remove this row
             # and the branch from `on.push.branches` once the workflow lands.
@@ -78,7 +79,7 @@ jobs:
           {
             echo "LANG_TAG=$lang_tag"
             echo "DOC_BUILDER_LANGUAGE=$doc_builder_language"
-            echo "SYNC_BRANCH=translation-sync/$lang_tag"
+            echo "SYNC_PREFIX=docs/translation-sync-$branch_tag-"
           } >> "$GITHUB_ENV"
 
       - name: Checkout code
@@ -86,6 +87,12 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Resolve sync branch
+        run: |
+          read -r commit_date commit < <(git log -1 --format='%cs %H' HEAD -- \
+            docs/source ":(exclude)docs/source/$LANG_TAG")
+          echo "SYNC_BRANCH=$SYNC_PREFIX${commit_date//-/}-${commit:0:7}" >> "$GITHUB_ENV"
 
       - name: Setup uv and Python
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # v8.3.2
@@ -226,17 +233,30 @@ jobs:
         run: |
           : "${GH_TOKEN:?missing repository secret}"
           title="docs(i18n): sync $LANG_TAG translations"
+          bot_email="github-actions[bot]@users.noreply.github.com"
+
+          lease="$(git rev-parse --verify --quiet "refs/remotes/origin/$SYNC_BRANCH" || true)"
+          if [ -n "$lease" ] && [ "$(git log -1 --format='%ae %ce' "$lease")" != "$bot_email $bot_email" ]; then
+            echo "::error::$SYNC_BRANCH has commits from outside this workflow; merge or close its pull request first."
+            exit 1
+          fi
 
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.email "$bot_email"
           git checkout -B "$SYNC_BRANCH"
           git commit -m "$title"
-          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${REPOSITORY}.git" "$SYNC_BRANCH"
+          git push --force-with-lease="$SYNC_BRANCH:$lease" \
+            "https://x-access-token:${GH_TOKEN}@github.com/${REPOSITORY}.git" "$SYNC_BRANCH"
 
           number="$(gh pr list --head "$SYNC_BRANCH" --state open --json number --jq '.[0].number')"
           if [ -z "$number" ]; then
-            gh pr create --base "$GITHUB_REF_NAME" --head "$SYNC_BRANCH" --title "$title" \
-              --label documentation --body-file pr-body.md
+            url="$(gh pr create --base "$GITHUB_REF_NAME" --head "$SYNC_BRANCH" --title "$title" \
+              --label documentation --body-file pr-body.md)"
+            gh pr list --base "$GITHUB_REF_NAME" --state open --json number,headRefName \
+              --jq ".[] | select(.headRefName | startswith(\"$SYNC_PREFIX\")) | select(.headRefName != \"$SYNC_BRANCH\") | .number" |
+              while read -r old; do
+                gh pr close "$old" --comment "Superseded by #${url##*/}."
+              done
           else
             # Editing the body notifies nobody, so the comment is what tells subscribers the
             # branch moved. It is deliberately not posted when the pull request is first created.
