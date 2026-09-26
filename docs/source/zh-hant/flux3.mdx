@@ -1,0 +1,263 @@
+# FLUX 3 Action[[flux-3-action]]
+
+FLUX 3 Action 會從相機觀測、狀態與任務指令預測機器人動作。凍結的 Video VAE 與文字編碼器會饋入擴散 Transformer，由其預測影片潛在表示與動作區塊；推論時只會回傳動作。LeRobot 支援推論與 PEFT（參數高效微調）：LoRA（低秩調適）會調整主幹，而機器人的動作與條件頭則完整訓練。
+
+我們提供 `flux-3-action-base` 作為基礎動作模型，並附上適用於 SO-101 的 `flux-3-action-so101` 與 Franka Panda 機器人的 `flux-3-action-droid`（在 DROID 資料集上微調）等微調版本。
+本文的核心範例是基於 `flux-3-action-so101` 模型，透過 LoRA 進行任務調適。
+
+若要從基礎模型訓練新的機器人具身（embodiment），或進行完整微調，請使用我們獨立的 [flux-action](https://github.com/black-forest-labs/flux-action) 儲存庫。
+
+## 安裝[[installation]]
+
+在 LeRobot 檢出目錄中，安裝訓練、策略、PEFT 與 EMA（指數移動平均）相依套件：
+
+```bash
+pip install -e ".[training,flux3,peft,diffusion]"
+```
+
+Video VAE 也需要來自 https://whl.natten.org、與 torch/CUDA 相容的 **NATTEN** wheel。
+若使用 torch 2.11 與 CUDA 12.8：
+
+```bash
+uv pip install natten==0.21.6+torch2110cu128 --find-links https://whl.natten.org
+```
+
+若使用 torch 2.10，請使用 `natten==0.21.6+torch2100cu128`，或針對你的環境自行建置。
+
+## SO-101 任務調適[[so-101-task-adaptation]]
+
+使用 **30 Hz** 的 LeRobot v3 資料集，其中包含六個絕對命令動作通道，以及六個量測狀態
+通道，且關節順序與單位需一致。夾爪位於最後。請提供原始值、一致的機器人
+校正，以及 `task` 中的指令。
+
+### 相機[[cameras]]
+
+相機名稱、數量與配置皆可調整。SO-101 套件依相機所見內容為其兩台相機命名：
+
+| 相機 | 鍵                         |
+| ---- | -------------------------- |
+| 場景 | `observation.images.scene` |
+| 手腕 | `observation.images.wrist` |
+
+![SO-101 場景相機（左）與手腕相機（右），顯示藍色盒子與容器](https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/lerobot/so101_camera_tiling.png)
+
+你可以使用 `--rename_map` 將相機名稱對應至預期的鍵，例如：
+
+```bash
+--rename_map='{"observation.images.top":"observation.images.scene","observation.images.gripper_cam":"observation.images.wrist"}'
+```
+
+rollout 時請使用相同的對應；若鍵相符，則不需要對應表。請參閱 [重新命名對應](https://huggingface.co/docs/lerobot/main/zh-hant/rename_map)。
+
+### 載入與訓練[[load-and-train]]
+
+從
+[`black-forest-labs/flux-3-action-so101`](https://huggingface.co/black-forest-labs/flux-3-action-so101) 載入 SO-101 策略。
+儲存的設定會自動從 `black-forest-labs/flux-3-action-base` 的固定
+修訂版本載入共用的 VAE 與文字編碼器。
+若存取受限，請使用具備存取權的帳號執行 `hf auth login` 進行驗證。
+在 LeRobot 檢出目錄中執行：
+
+```bash
+python -m lerobot.scripts.lerobot_train \
+  --config_path=examples/flux3/lora.json \
+  --policy.path=black-forest-labs/flux-3-action-so101 --policy.device=cuda \
+  --dataset.repo_id=YOUR_ORG/YOUR_SO101_DATASET \
+  --output_dir=outputs/so101_lora
+```
+
+Hub 快取會保留已下載的模型與共用編碼器，以便繼續訓練與適配器推論。
+
+固定的 SO-101 微調檢查點使用 `scene` / `wrist` 相機鍵、八個觀測時間步、
+兩個獨立編碼的視覺快照，以及過去動作／狀態條件。它會預測 42 個動作，
+以 30 Hz 執行前 32 個動作，然後重新規劃。其儲存的處理器帶有基礎模型相符的正規化
+統計資料。這些檢查點設定在任務調適期間會保留。
+共用的 `examples/flux3/lora.json` 僅提供訓練／執行階段設定與訓練預算；
+同一個檔案會以 `lora.json` 形式捆綁在每個 Hub 套件中。相機配置、條件、動作
+表示與損失設定皆來自檢查點。這些命令會保留儲存的
+執行長度 32、guidance 3/3 與立即執行。若要使用 guidance 4/1 與編譯，
+請加入 `--policy.guidance_scale=4 --policy.guidance_scale_action=1 --policy.compile_model=true`。
+
+> **條件實驗：** LeRobot 會公開 `n_obs_steps`、`history_snapshots` 與
+> `condition_on_past_actions`。變更這些項目需要相容的模型／處理器設定與
+> 微調；一般任務調適請保留檢查點儲存的值。
+
+此預設設定會啟用 rank/alpha 32 的 LoRA 與衰減 0.999 的 EMA；不會自動上傳任何內容。若要啟用
+新的適配器，請透過頂層 `peft` 設定，而不是 `--policy.use_peft=true`，後者是用來識別已儲存的適配器。
+
+在我們的實驗中，EMA 在 DROID 上帶來顯著效益，而 SO-101 的結果迄今好壞參半。
+其效益取決於資料與訓練設定。我們建議保持啟用 EMA，並
+在相同的 rollout 協定下評估原始與 EMA 檢查點，再選擇要部署哪一個。
+定期離線驗證損失會使用原始權重；它不會自動比較兩種變體。
+
+先從單 GPU 預算開始，以便快速迭代。若需要更大的訓練預算，請使用相同設定
+並搭配以下覆寫：
+
+```bash
+accelerate launch --num_processes=4 --multi_gpu -m lerobot.scripts.lerobot_train \
+  --config_path=examples/flux3/lora.json \
+  --policy.path=black-forest-labs/flux-3-action-so101 --policy.device=cuda \
+  --dataset.repo_id=YOUR_ORG/YOUR_SO101_DATASET \
+  --batch_size=8 --steps=14000 \
+  --output_dir=outputs/so101_lora_large
+```
+
+| 預算             | GPU 數量 | 每個 GPU 的批次大小 | 累積 | 有效批次 | 微步（`steps`） | 最佳化器更新 |
+| ---------------- | -------- | ------------------- | ---- | -------- | --------------- | ------------ |
+| 快速迭代（預設） | 1        | 2                   | 4    | 8        | 10,000          | 2,500        |
+| 較大預算         | 4        | 8                   | 4    | 128      | 14,000          | 3,500        |
+
+有效批次為 GPU 數量 × 每個 GPU 的批次大小 × 累積。LeRobot 會以微步計算 `steps`、`save_freq` 與
+`eval_steps`；若要得到最佳化器更新次數，請除以累積。預設設定每 500 個微步（125 次更新）儲存與評估
+一次。變更累積時，請保持這三項設定都能被累積整除。
+排程器凍結、暖身、衰減與冷卻長度也使用微步。設定這些階段長度時，請將所需
+的最佳化器更新次數乘以累積因子。
+兩種預算都使用相同的 LoRA、最佳化器與 EMA 設定，並保留所載入基礎模型的條件、
+動作維度與正規化。檢查點會同時包含原始與 EMA 適配器。請使用留出評估與 rollouts 來選擇預算
+與檢查點；較大的批次不保證結果更好。
+
+此預設設定會為每個任務保留最後 20% 的回合作為評估。請依你的硬體調整批次大小與累積；
+請參閱 [多 GPU 訓練](https://huggingface.co/docs/lerobot/main/zh-hant/multi_gpu_training)
+與 [PEFT 訓練](https://huggingface.co/docs/lerobot/main/zh-hant/peft_training)。
+
+## DROID 任務調適[[droid-task-adaptation]]
+
+**實驗性：** `examples/flux3/lora.json` 會重複使用 SO-101 的 PEFT 最佳化器、LoRA、dropout、
+EMA 與訓練預算設定。設定載入已檢查過，但端到端 DROID PEFT
+訓練與任務效能尚未驗證。
+
+直接透過儲存庫 ID 載入 [DROID 策略](https://huggingface.co/black-forest-labs/flux-3-action-droid)；
+其共用編碼器會自動解析：
+
+```bash
+lerobot-train \
+  --config_path=examples/flux3/lora.json \
+  --policy.path=black-forest-labs/flux-3-action-droid \
+  --dataset.repo_id=YOUR_ORG/YOUR_DROID_TASK_DATASET \
+  --output_dir=outputs/droid_lora
+```
+
+這會使用有效批次 8 與 2,500 次最佳化器更新，並啟用 EMA，且每 125 次更新儲存原始／EMA 檢查點。
+自動 Hub 上傳已停用。若需要較大預算，請如 SO-101 範例般以四個
+GPU 啟動，並加入 `--batch_size=8 --steps=14000`。
+
+此預設設定會載入 DROID 檢查點的相機配置、條件、動作表示、控制
+頻率與處理器，僅覆寫列出的訓練／執行階段設定。你的資料集必須符合
+檢查點的約定：目前的套件使用三台相機、八個狀態／動作通道，以及
+15 Hz 的絕對關節位置命令。如有需要，請使用 `--rename_map` 對應相機名稱。
+兩種機器人使用相同的訓練範例；載入或推論不需要機器人專屬的配方。
+
+## 預設值與正規化[[defaults-and-normalization]]
+
+新的設定會使用這些 PEFT 預設值。載入 `--policy.path` 會使用檢查點儲存的設定；
+明確的 config／CLI 覆寫具有較高優先順序。DROID 檢查點會保留其自身的設定。
+
+| 設定                 | 預設值                                       |
+| -------------------- | -------------------------------------------- |
+| 條件                 | 目前影像與量測狀態；1 個快照，不使用過去動作 |
+| 動作                 | 命令增量；預測 32 個並以 30 Hz 執行 32 個    |
+| 相機                 | 在 256 × 512 畫布上並排的兩個視圖            |
+| 適配器／頭部學習率   | `1e-4` / `5e-4`                              |
+| 權重衰減／梯度裁剪   | `0` / `1`                                    |
+| 凍結／暖身           | 無                                           |
+| 梯度檢查點／影像擴增 | 開啟／關閉                                   |
+
+新的設定使用 `n_obs_steps=1`、`history_snapshots=1` 與 `condition_on_past_actions=false`。
+載入檢查點會保留其明確值：固定的 SO-101 套件使用八個歷史
+時間步、兩個視覺快照，以及過去動作／狀態條件。`conditioning="history"` 會選用
+獨立快照編碼；它本身不會決定時間步數量。訓練也會
+讀取未來影格與命令作為目標，以及前一個命令來計算動作增量。
+
+相機名稱／順序、狀態／動作維度與絕對動作通道仍依機器人而異。
+SO-101 檢查點會將最後一個通道保持為絕對（`delta_absolute_dims=[-1]`），並使用通道權重
+`[1, 1, 1, 1, 1, 2]`。類別預設值不使用絕對通道例外，並使用相等權重。
+
+基礎模型儲存的處理器擁有正規化統計資料。請饋入原始狀態／動作，並在訓練、繼續訓練與推論時保持相同的
+統計資料。SO-101 套件的分位數假設其關節順序、
+單位與校正；它們並非通用的 SO-101 校正值。若要使用不同的統計資料，
+請在訓練前準備一個具有相符處理器的個別基礎模型。絕對動作資料集統計資料
+無法取代命令增量統計資料。
+
+訓練會儲存適配器與已訓練頭部，並參照完整基礎模型。重新載入時，請保持該基礎模型及其凍結編碼器檔案可存取；適配器不會自動合併到其中。
+
+## 繼續訓練[[resume]]
+
+```bash
+lerobot-train \
+  --config_path=outputs/so101_lora/checkpoints/last/pretrained_model/train_config.json \
+  --resume=true
+```
+
+從原始 `pretrained_model` 檢查點繼續訓練，這會還原最佳化器與 EMA 狀態。推論時，
+若已啟用 EMA，你可以選擇其同層的 `pretrained_model_ema`。請保留每個適配器原始的基礎模型
+與處理器；新下載的基礎模型不能取代較舊適配器所使用的基礎模型。
+
+## 推論[[inference]]
+
+將 LeRobot runner 的 `--policy.path` 指向訓練後的適配器檢查點；它會載入所參照的
+基礎模型與儲存的處理器。若要以 **完整基礎模型** 直接呼叫，請一併載入處理器：
+
+```python
+from lerobot.policies.factory import make_pre_post_processors
+from lerobot.policies.flux3 import Flux3Policy
+
+checkpoint = "black-forest-labs/flux-3-action-so101"
+policy = Flux3Policy.from_pretrained(checkpoint).eval()
+preprocessor, postprocessor = make_pre_post_processors(policy.config, pretrained_path=checkpoint)
+
+# 在每個控制週期執行，包括動作排隊時：
+prepared = preprocessor(observation)
+normalized_action = policy.select_action(prepared)
+absolute_command = postprocessor(normalized_action)
+```
+
+前處理器會緩衝觀測／命令歷史。後處理器會還原正規化、積分
+增量，並在每個週期更新共用命令歷史。第一個命令會以量測
+狀態為基準；後續命令則從前一個命令積分。直接輸出的策略結果已經過正規化，且
+必須進行後處理。請在回合邊界或介入後重設策略與兩個處理器；
+LeRobot 的同步執行器會執行此操作。不支援 RTC／非同步推論。
+
+對於預設的單一時間步策略，目前的影像與量測狀態已足夠。若要在離線
+預測中使用明確的增量錨點，請提供含有一個前導命令的 `observation.command_history`；
+這會錨定輸出積分，而不會將命令加入模型的條件。明確設定
+為多個觀測時間步的檢查點需要 `policy.config.n_obs_steps` 個影像／狀態與命令
+歷史。請將輸入傳遞至前處理器，呼叫 `predict_action_chunk`，然後進行後處理。
+`--policy.compile_model=true` 會啟用凍結編碼器與推論 DiT 的延遲編譯；
+它不會編譯訓練 DiT。
+
+若要降低推論 VRAM，請在載入後以及最後一次 `policy.to(...)` 呼叫後，將 Qwen 移到 CPU：
+
+```python
+policy.frozen.text_encoder.cpu()
+```
+
+這會將約 8.3 GiB 的權重移至主機 RAM；未快取的指令編碼會較慢，而
+嵌入仍會傳輸至策略裝置並快取。它不會降低載入期間的峰值記憶體，
+且之後的 `policy.to(...)` 會將 Qwen 隨著策略移回。
+
+## 訓練其他具身[[training-other-embodiments]]
+
+對於我們尚未提供微調檢查點的具身，請從
+[flux-action](https://github.com/black-forest-labs/flux-action) 中的基礎模型開始。該工作流程需要定義
+機器人的動作與條件頭、相機配置、動作表示與正規化。
+僅有相同維度並不能讓另一個機器人的頭部可直接重複使用。
+
+若後續要用於 LeRobot 推論或任務調適，請將訓練後的模型打包為完整的 LeRobot
+策略，並附上其設定與相符的處理器。單獨的原始權重檔案不是可載入的
+`--policy.path` 套件。本指南著重於將現有的 SO-101 與 DROID 策略調適到新任務。
+
+所有策略只會建構 `video` 與 `video_cond` 內容串流，以及機器人的動作串流。
+未使用的影像／音訊權重會在載入前被過濾，節省約 28% 的 DiT 參數，且不
+改變動作預測。儲存的串流清單不會啟用影像／音訊分支；載入並儲存
+完整基礎模型會記錄精簡後的配置。以已移除串流為目標的適配器需要其原始
+基礎模型與較舊的程式碼修訂版本。
+
+完整策略預設會嚴格載入。在過濾已知未使用的串流後，遺漏、非預期
+或形狀錯誤的權重會引發錯誤。明確的 `strict=False` 僅允許初始化遺漏的
+具身頭部，或調整大小不符的具身頭部；主幹權重仍為必要，且會檢查形狀。
+
+## 驗證[[validation]]
+
+CPU 測試涵蓋打包、處理器、PEFT 更新與檢查點／繼續訓練。先前的真實權重 H200 檢查
+早於目前的處理器重構。這個確切的修訂版本仍需要 GPU 與
+機器人驗證；現有檢查無法確立四 GPU 容量或新具身上的 PEFT 品質。
