@@ -1,8 +1,8 @@
-## 🌐 {{ lang_tag }} documentation sync
+## Summary / Motivation
 
-Machine-translated from the English docs by `scripts/translation/sync.py` using `{{ model }}`.
-Wording comes from the
-[translation prompt]({{ prompt_url }}).
+The [translation sync script]({{ sync_script_url }}) generated {{ lang_tag }} translations from the
+English docs using the `{{ model }}` LLM. It used the [general prompt]({{ general_prompt_url }}) and
+[{{ lang_tag }} prompt]({{ prompt_url }}).
 
 {% if last_sync %}
 Previous sync was {{ last_sync }}; English sources are now at {{ source }}.
@@ -10,9 +10,12 @@ Previous sync was {{ last_sync }}; English sources are now at {{ source }}.
 English sources are at {{ source }}.
 {% endif %}
 
-Preview deployment: <{{ preview_url }}/>
+## What changed
 
-### Summary
+Alongside the translated pages, the sync maintains:
+
+- `docs/source/{{ lang_tag }}/_toctree.yml`: sidebar order and translated titles.
+- `docs/source/{{ lang_tag }}/translation-record.json`: source versions and translated titles for future syncs.
 
 | Status | Count | Pages |
 |---|--:|---|
@@ -22,44 +25,84 @@ Preview deployment: <{{ preview_url }}/>
 | **Total** | **{{ total }}** | — |
 {% if needs_attention %}
 
-### Needs attention
+### Pages not translated in this run
 
 > [!WARNING]
-> These pages **keep their previous translation**: ⚠️ failed the structure check, 💥 raised an
+> These pages **keep their previous translation**: ⚠️ failed the structure check, ❌ raised an
 > error. The English source has moved ahead of them.
 >
-> | Page | | Current | English | Translated from | English now | Behind by |
-> |---|:-:|---|---|---|---|--:|
+> | Page | | English page | English commit last translated | Latest English commit | English changes (commits, lines) |
+> |---|:-:|---|---|---|--:|
 {% for doc in needs_attention %}
-> | `{{ doc.name }}` | {{ doc.emoji }} | {{ doc.current }} | {{ doc.english }} | {{ doc.translated_from }} | {{ doc.english_now }} | {{ doc.behind }} |
+> | `{{ doc.name }}` | {{ doc.emoji }} | {{ doc.english }} | {{ doc.translated_from }} | {{ doc.english_now }} | {{ doc.english_changes }} |
 {% endfor %}
 {% endif %}
 {% if pages %}
 
 ### Pages in this sync
 
-| Page | | Preview | English | Translated from | English now | Change |
+| Page | | Translation | English page | English commit last translated | Latest English commit | English changes (commits, lines) |
 |---|:-:|---|---|---|---|--:|
 {% for doc in pages %}
-| `{{ doc.name }}` | {{ doc.emoji }} | {{ doc.preview }} | {{ doc.english }} | {{ doc.translated_from }} | {{ doc.english_now }} | {{ doc.change }} |
+| `{{ doc.name }}` | {{ doc.emoji }} | {{ doc.translation }} | {{ doc.english }} | {{ doc.translated_from }} | {{ doc.english_now }} | {{ doc.english_changes }} |
 {% endfor %}
 {% endif %}
 
-### How to review
+## How to run locally
 
+With Node.js installed, run from the repository root:
+
+```bash
+uv sync --locked --extra dataset
+uv pip install -r docs-requirements.txt
+uv run --no-sync doc-builder preview lerobot "docs/source/{{ lang_tag }}" \
+  --language {{ doc_builder_language }}
+```
+
+Open the URL printed by `doc-builder preview` to view the translated pages.
+
+## Reviewer notes
+
+Anyone in the community is free to review the PR.
+
+{% if has_preview %}
+Preview: <{{ preview_url }}>{% if preview_pending %} (requires translated docs in Documentation CI){% endif %}
+
+
+{% endif %}
+{% if to_review %}
 {{ to_review }}.
+
+{% endif %}
+### Reviewer checklist
+
+You may include this sample checklist in your review comment. Adjust the items as needed and check
+only what you verified:
+
+```md
+- [ ] Files reviewed: [list the file paths]
+- [ ] Terminology and wording have no issues.
+- [ ] The translation reads smoothly and is easy to understand.
+- [ ] Documentation components render correctly in the preview.
+- [ ] No paragraphs are missing compared with the English source.
+- [ ] Links in the reviewed pages work.
+```
+
+For small changes, you can optionally suggest an edit with a GitHub `suggestion` block on the relevant line.
+
 {% if needs_attention %}
 
-#### Resolve the stale pages
+### Resolve the stale pages
 
-These still serve the translation from before this run.
-[Needs attention](#needs-attention) counts the commits each one is behind; for a page translated
-before, the block below carries the `git diff` for what moved.
+These keep the translation from before this run.
+[Pages not translated in this run](#pages-not-translated-in-this-run) shows how many English
+commits each page is behind. For a page translated before, the block below carries the `git diff`
+for what moved.
 {% for doc in needs_attention %}
 {% if doc.error or doc.command %}
 
 <details>
-<summary>{{ doc.emoji }} <code>{{ doc.name }}</code> — {% if doc.published %}{{ doc.current_html }} · {% endif %}{{ doc.english_html }}{% if doc.changed %} — <code>{{ doc.change_plain }}</code>{% endif %}</summary>
+<summary>{{ doc.emoji }} <code>{{ doc.name }}</code> — {{ doc.english_html }}{% if doc.changed %} — <code>{{ doc.change_plain }}</code>{% endif %}</summary>
 {% if doc.error %}
 
 ```text
@@ -76,31 +119,31 @@ before, the block below carries the `git diff` for what moved.
 </details>
 {% else %}
 
-- {{ doc.emoji }} `{{ doc.name }}` — {% if doc.published %}{{ doc.current }} · {% endif %}{{ doc.english }}
+- {{ doc.emoji }} `{{ doc.name }}` — {{ doc.english }}
 {% endif %}
 {% endfor %}
 {% endif %}
 {% if read_in_full %}
 
-#### Read in full
+### Review new translations in full
 
 These pages are new, so every passage is a first translation.
 
 {% for doc in read_in_full %}
-- {{ doc.emoji }} `{{ doc.name }}` — {{ doc.preview }} · {{ doc.english }}
+- {{ doc.emoji }} `{{ doc.name }}` — {{ doc.translation }} · {{ doc.english }}
 {% endfor %}
 {% endif %}
 {% if changes %}
 
-#### Review the English changes
+### Review updated translations against English changes
 
 The English sources are not part of this PR. Content diffs are below, and title-only changes are
-identified separately. The matching translation change is in the **Files changed** tab, and the
-preview link shows it rendered. Content diff blocks include a command to reproduce them locally.
+identified separately. The matching translation change is in the **Files changed** tab.
+Content diff blocks include a command to reproduce them locally.
 {% for doc in changes %}
 
 <details>
-<summary>{{ doc.emoji }} <code>{{ doc.name }}</code> — {{ doc.preview_html }} · {{ doc.english_html }} — <code>{{ doc.change_plain }}</code>{{ doc.note }}</summary>
+<summary>{{ doc.emoji }} <code>{{ doc.name }}</code> — {{ doc.translation_html }} · {{ doc.english_html }} — <code>{{ doc.change_plain }}</code>{{ doc.note }}</summary>
 {% if doc.title_only %}
 
 Only the English sidebar title changed in `_toctree.yml`.

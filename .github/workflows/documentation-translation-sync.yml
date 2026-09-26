@@ -26,13 +26,15 @@ on:
 
   push:
     branches:
-      - docs/i18n-zh-hant-workflow
+      - main
+      # TODO: Remove this fork-only test branch before merging upstream.
+      - docs/i18n-zh-tool
     paths:
       - "docs/source/**"
-      - "!docs/source/zh-hant/**"
-      - "docs/translation-prompts/**"
-      - "scripts/translation/**"
+      # TODO: Remove this test trigger before merging upstream.
       - ".github/workflows/documentation-translation-sync.yml"
+      - "!docs/source/zh-hans/**"
+      - "!docs/source/zh-hant/**"
 
 permissions:
   contents: read
@@ -40,6 +42,7 @@ permissions:
 env:
   UV_VERSION: "0.11.30"
   PYTHON_VERSION: "3.12"
+  # TODO: Remove with the fork-only preview build before merging upstream.
   DOC_BUILDER_SHA: "662b3433d61ad5d6afbf8f4a1fb02d9dcec74e2d"
 
 # Translation runs cost money and take a long time; never cancel one that is already paying.
@@ -49,37 +52,42 @@ concurrency:
 
 jobs:
   sync_translation:
-    name: Sync ${{ github.ref_name }}
-    if: github.repository == 'tc-huang/lerobot'
+    name: Sync ${{ matrix.lang_tag }}
+    # TODO: Remove the fork clause before merging upstream.
+    if: >-
+      (github.repository == 'tc-huang/lerobot' && github.ref_name == 'docs/i18n-zh-tool') ||
+      (github.repository == 'huggingface/lerobot' && github.ref_name == 'main')
     runs-on: ubuntu-latest
     # Being killed here leaves the same partial state as a cancellation, so raise this before a
     # full-tree run ever gets close to it.
     timeout-minutes: 300
-    # No job-level permissions: every write goes through TRANSLATION_PR_TOKEN, so GITHUB_TOKEN
-    # never needs more than the workflow-level `contents: read` that checkout reads with.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lang_tag: zh-hans
+            doc_builder_language: zh-CN
+          - lang_tag: zh-hant
+            doc_builder_language: zh-TW
     env:
+      LANG_TAG: ${{ matrix.lang_tag }}
+      DOC_BUILDER_LANGUAGE: ${{ matrix.doc_builder_language }}
+      # TODO: Verify TRANSLATION_MODEL and TRANSLATION_BASE_URL variables plus
+      # TRANSLATION_API_KEY and TRANSLATION_PR_TOKEN secrets upstream before merging.
       MODEL: ${{ vars.TRANSLATION_MODEL }}
       BASE_URL: ${{ inputs.base_url || vars.TRANSLATION_BASE_URL }}
     steps:
-      - name: Resolve target language
+      - name: Resolve pull request base
         run: |
-          branch_tag="${GITHUB_REF_NAME#docs/i18n-}"
-          lang_tag="$branch_tag"
-          # doc-builder's kit only recognises a language segment shaped xx or xx-YY
-          # (kit/src/lib/hfDocPaths.js), so a script subtag like zh-hant cannot be passed
-          # through: every internal link would carry a doubled language segment. This row is
-          # the one thing about a language that cannot be derived from its branch name.
-          case "$branch_tag" in
-            zh-hant) doc_builder_language=zh-TW ;;
-            # Scratch branch for testing this workflow against the same language. Remove this row
-            # and the branch from `on.push.branches` once the workflow lands.
-            zh-hant-workflow) lang_tag=zh-hant doc_builder_language=zh-TW ;;
-            *) echo "$GITHUB_REF_NAME is not a configured translation branch" >&2; exit 1 ;;
-          esac
+          # TODO: Replace this branch selection with base=main before merging upstream.
+          if [ "$GITHUB_REPOSITORY" = 'tc-huang/lerobot' ]; then
+            base="docs/i18n-$LANG_TAG"
+          else
+            base=main
+          fi
           {
-            echo "LANG_TAG=$lang_tag"
-            echo "DOC_BUILDER_LANGUAGE=$doc_builder_language"
-            echo "SYNC_PREFIX=docs/translation-sync-$branch_tag-"
+            echo "PR_BASE=$base"
+            echo "SYNC_PREFIX=docs/translation-sync-$LANG_TAG-"
           } >> "$GITHUB_ENV"
 
       - name: Checkout code
@@ -88,11 +96,33 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # TODO: Remove this fork-only checkout before merging upstream.
+      - name: Checkout existing translations
+        if: github.repository == 'tc-huang/lerobot'
+        run: |
+          cp -R scripts/translation "$RUNNER_TEMP/translation"
+          cp -R docs/translation-prompts "$RUNNER_TEMP/translation-prompts"
+          git switch --detach "origin/$PR_BASE"
+          mkdir -p scripts docs
+          cp -R "$RUNNER_TEMP/translation" scripts/translation
+          cp -R "$RUNNER_TEMP/translation-prompts" docs/translation-prompts
+
+      # TODO: Ensure both translation roots exist on upstream main before enabling this job.
+      - name: Check existing translations
+        run: |
+          test -f "docs/source/$LANG_TAG/_toctree.yml" || {
+            echo "::error::docs/source/$LANG_TAG is missing from $PR_BASE"
+            exit 1
+          }
+
       - name: Resolve sync branch
         run: |
           read -r commit_date commit < <(git log -1 --format='%cs %H' HEAD -- \
             docs/source ":(exclude)docs/source/$LANG_TAG")
-          echo "SYNC_BRANCH=$SYNC_PREFIX${commit_date//-/}-${commit:0:7}" >> "$GITHUB_ENV"
+          {
+            echo "BASE_SHA=$(git rev-parse HEAD)"
+            echo "SYNC_BRANCH=$SYNC_PREFIX${commit_date//-/}-${commit:0:7}"
+          } >> "$GITHUB_ENV"
 
       - name: Setup uv and Python
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # v8.3.2
@@ -101,7 +131,9 @@ jobs:
           version: ${{ env.UV_VERSION }}
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install lerobot and doc-builder
+      # TODO: Remove this fork-only installation before merging upstream.
+      - name: Install preview dependencies
+        if: github.repository == 'tc-huang/lerobot'
         run: |
           # The dev extra is here for pre-commit, which the generated pages go through below. It
           # is the only way to get the version uv.lock pins rather than whatever PyPI resolves to.
@@ -117,6 +149,17 @@ jobs:
             "huggingface-hub>=1.6.0,<2.0.0" \
             "jinja2>=3.1.0,<4.0.0" \
             "pyyaml>=6.0.0,<7.0.0"
+
+      # TODO: Remove this repository guard before merging upstream.
+      - name: Install translation dependencies
+        if: github.repository == 'huggingface/lerobot'
+        run: |
+          uv venv --python "$PYTHON_VERSION"
+          uv pip install \
+            "huggingface-hub>=1.6.0,<2.0.0" \
+            "jinja2>=3.1.0,<4.0.0" \
+            "pyyaml>=6.0.0,<7.0.0" \
+            "pre-commit>=3.7.0,<5.0.0"
 
       - name: Translate
         env:
@@ -162,8 +205,9 @@ jobs:
             git diff --cached --stat
           fi
 
+      # TODO: Remove the following three fork-only build and deploy steps before merging upstream.
       - name: Build translated docs
-        if: steps.staged.outputs.changed == 'true'
+        if: github.repository == 'tc-huang/lerobot' && steps.staged.outputs.changed == 'true'
         run: |
           uv run --no-sync doc-builder build \
             --language "$DOC_BUILDER_LANGUAGE" \
@@ -174,7 +218,7 @@ jobs:
           [ -d "build/docs/lerobot/main/$DOC_BUILDER_LANGUAGE" ] || { echo "no build output" >&2; exit 1; }
 
       - name: Build English docs
-        if: steps.staged.outputs.changed == 'true'
+        if: github.repository == 'tc-huang/lerobot' && steps.staged.outputs.changed == 'true'
         run: |
           # The report links every page to the English it was translated from, so English ships in
           # the same deployment instead of pointing at a site that moves on its own.
@@ -186,7 +230,10 @@ jobs:
           # doc-builder sweeps its source folder recursively and then requires every built page to
           # be listed in _toctree.yml, so the other documentation roots cannot come along. A
           # subdirectory with its own _toctree.yml is a translation; api/ has none and stays.
-          find "$en_source" -mindepth 2 -name _toctree.yml -exec dirname {} \; | xargs rm -rf
+          find "$en_source" -mindepth 2 -name _toctree.yml -print0 |
+            while IFS= read -r -d '' toctree; do
+              rm -rf "${toctree%/*}"
+            done
           uv run --no-sync doc-builder build \
             --language en \
             --build_dir build/docs \
@@ -197,7 +244,7 @@ jobs:
 
       - name: Deploy preview to Cloudflare Pages
         id: deploy
-        if: steps.staged.outputs.changed == 'true'
+        if: github.repository == 'tc-huang/lerobot' && steps.staged.outputs.changed == 'true'
         uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0  # v4.0.0
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -210,22 +257,31 @@ jobs:
       - name: Render report
         if: steps.staged.outputs.changed == 'true'
         env:
+          # TODO: Remove this output and the fork-only preview block below before merging upstream.
           DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment-url }}
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
-          : "${DEPLOYMENT_URL:?wrangler did not report a deployment url}"
-          docs_path="docs/lerobot/main/$DOC_BUILDER_LANGUAGE"
-          uv run --no-sync scripts/translation/report.py \
-            --report report.json \
-            --preview-url "$DEPLOYMENT_URL/$docs_path" \
-            --current-url "https://lerobot-docs-$LANG_TAG.pages.dev/$docs_path" \
-            --english-url "$DEPLOYMENT_URL/docs/lerobot/main/en" \
-            --repo-url "$REPO_URL" \
-            --prompt-url "$REPO_URL/blob/$GITHUB_REF_NAME/docs/translation-prompts/$LANG_TAG.md" \
-            --pr-body pr-body.md \
-            --comment comment.md
+          args=(
+            --report report.json
+            --repo-url "$REPO_URL"
+            --source-ref "$GITHUB_REF_NAME"
+            --lang-tag "$LANG_TAG"
+            --base-ref "$BASE_SHA"
+            --head-ref "$SYNC_BRANCH"
+            --pr-body pr-body.md
+          )
+          if [ "$GITHUB_REPOSITORY" = 'tc-huang/lerobot' ]; then
+            : "${DEPLOYMENT_URL:?wrangler did not report a deployment url}"
+            docs_path="docs/lerobot/main/$DOC_BUILDER_LANGUAGE"
+            args+=(
+              --preview-url "$DEPLOYMENT_URL/$docs_path"
+              --english-url "$DEPLOYMENT_URL/docs/lerobot/main/en"
+            )
+          fi
+          uv run --no-sync scripts/translation/report.py "${args[@]}"
 
       - name: Create or update pull request
+        id: pull_request
         if: steps.staged.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.TRANSLATION_PR_TOKEN }}
@@ -248,21 +304,54 @@ jobs:
           git push --force-with-lease="$SYNC_BRANCH:$lease" \
             "https://x-access-token:${GH_TOKEN}@github.com/${REPOSITORY}.git" "$SYNC_BRANCH"
 
+          # TODO: Remove the created outputs with the fork-only guard below before merging upstream.
           number="$(gh pr list --head "$SYNC_BRANCH" --state open --json number --jq '.[0].number')"
           if [ -z "$number" ]; then
-            url="$(gh pr create --base "$GITHUB_REF_NAME" --head "$SYNC_BRANCH" --title "$title" \
+            url="$(gh pr create --base "$PR_BASE" --head "$SYNC_BRANCH" --title "$title" \
               --label documentation --body-file pr-body.md)"
-            gh pr list --base "$GITHUB_REF_NAME" --state open --json number,headRefName \
+            number="${url##*/}"
+            echo "created=true" >> "$GITHUB_OUTPUT"
+            gh pr list --base "$PR_BASE" --state open --json number,headRefName \
               --jq ".[] | select(.headRefName | startswith(\"$SYNC_PREFIX\")) | select(.headRefName != \"$SYNC_BRANCH\") | .number" |
               while read -r old; do
-                gh pr close "$old" --comment "Superseded by #${url##*/}."
+                gh pr close "$old" --comment "Superseded by #$number."
               done
           else
-            # Editing the body notifies nobody, so the comment is what tells subscribers the
-            # branch moved. It is deliberately not posted when the pull request is first created.
-            gh pr edit "$number" --body-file pr-body.md
-            gh pr comment "$number" --body-file comment.md
+            echo "created=false" >> "$GITHUB_OUTPUT"
           fi
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+
+      - name: Publish pull request report
+        if: steps.staged.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.TRANSLATION_PR_TOKEN }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          PR_NUMBER: ${{ steps.pull_request.outputs.number }}
+          PR_CREATED: ${{ steps.pull_request.outputs.created }}
+        run: |
+          # TODO: Remove this repository guard before merging upstream.
+          if [ "$GITHUB_REPOSITORY" = 'huggingface/lerobot' ]; then
+            # TODO: Isolate English docs in documentation.yml before merging upstream.
+            # Later, set languages to en, zh-CN, zh-TW and map zh-hans/zh-hant
+            # to separate zh-CN/zh-TW source roots to enable these previews.
+            docs_root="https://moon-ci-docs.huggingface.co/docs/lerobot/pr_$PR_NUMBER"
+            uv run --no-sync scripts/translation/report.py \
+              --report report.json \
+              --repo-url "$REPO_URL" \
+              --source-ref "$GITHUB_REF_NAME" \
+              --lang-tag "$LANG_TAG" \
+              --base-ref "$BASE_SHA" \
+              --head-ref "$SYNC_BRANCH" \
+              --preview-url "$docs_root/$DOC_BUILDER_LANGUAGE" \
+              --english-url "$docs_root/en" \
+              --preview-pending \
+              --pr-body pr-body.md
+          fi
+          # TODO: Remove this fork-only guard before merging upstream.
+          if [ "$PR_CREATED" = 'true' ] && [ "$GITHUB_REPOSITORY" = 'tc-huang/lerobot' ]; then
+            exit 0
+          fi
+          gh pr edit "$PR_NUMBER" --body-file pr-body.md
 
       - name: Fail on skipped translations
         if: steps.translation_result.outputs.skipped != '0'
