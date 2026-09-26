@@ -166,7 +166,7 @@
   - local: openarm
     title: OpenArm
   - local: rebot_b601
-    title: reBot B601-DM
+    title: reBot B601
   - local: third_party_robots
     title: 第三方機器人與遙操作器
   title: 機器人（Robots）
