@@ -1,8 +1,8 @@
-# 策略部署（lerobot-rollout）
+# 策略部署（lerobot-rollout）[[policy-deployment-lerobot-rollout]]
 
 `lerobot-rollout` 是用于在真实机器人上部署已训练策略的统一 CLI。它支持多种执行策略和推理后端，既可快速评估，也可持续录制和进行人在回路的数据采集。
 
-## 快速开始
+## 快速开始[[quick-start]]
 
 除机器人和策略所需的额外依赖外，无需安装其他依赖。
 
@@ -18,13 +18,23 @@ lerobot-rollout \
 
 此命令会运行策略 30 秒，但不会录制数据。
 
+### 选择设备[[choosing-a-device]]
+
+在目标设备可用的主机上，传入 `--device=cpu` 或 `--device=cuda` 可覆盖检查点设备。
+解析后的设备会在加载策略并构建其处理器之前应用到策略配置。
+例如，在上面的命令中添加 `--device=cpu`，可在仅有 CPU 的主机上运行 CUDA 训练的检查点（前提是该策略支持 CPU 执行）。
+在机器人上部署前，请确认 CPU 推理能够满足所需的控制频率。
+
+省略 `--device` 时，rollout 会使用策略配置中的设备（如果已设置），否则自动选择一个可用设备。
+对于 `RolloutConfig(device=...)` 与 `build_rollout_context` 一起使用时，行为相同。
+
 ---
 
-## 执行策略
+## 执行策略[[strategies]]
 
 使用 `--strategy.type=<name>` 选择策略。每种策略都定义了独立的控制循环，以及相应的数据录制和交互语义。
 
-### Base（`--strategy.type=base`）
+### Base（`--strategy.type=base`）[[base---strategytypebase]]
 
 不录制数据的自主策略运行。适用于快速评估、演示，或只需要观察机器人运行状态的场景。
 
@@ -39,13 +49,13 @@ lerobot-rollout \
     --duration=60
 ```
 
-| 参数             | 说明                                    |
-| ---------------- | --------------------------------------- |
-| `--duration`     | 运行时长，单位为秒（0 表示无限运行）    |
-| `--task`         | 传递给策略的任务描述                    |
-| `--display_data` | 将观测和动作流式传输到 Rerun 进行可视化 |
+| 参数             | 说明                                    | 默认值 |
+| ---------------- | --------------------------------------- | ------ |
+| `--duration`     | 运行时长，单位为秒（0 表示无限运行）    | 0      |
+| `--task`         | 传递给策略的任务描述                    | --     |
+| `--display_data` | 将观测和动作流式传输到 Rerun 进行可视化 | false  |
 
-### Sentry（`--strategy.type=sentry`）
+### Sentry（`--strategy.type=sentry`）[[sentry---strategytypesentry]]
 
 连续自主录制，并定期上传到 Hugging Face Hub。系统会根据摄像头分辨率和 FPS 自动计算 episode 边界，因此每个保存的 episode 都会生成完整视频文件，从而提高上传效率。
 
@@ -64,14 +74,14 @@ lerobot-rollout \
     --duration=3600
 ```
 
-| 参数                                   | 说明                                               |
-| -------------------------------------- | -------------------------------------------------- |
-| `--strategy.upload_every_n_episodes`   | 每 N 个 episode 推送到 Hub（默认为 5）             |
-| `--strategy.target_video_file_size_mb` | episode 轮换时的目标视频文件大小（默认为自动设置） |
-| `--dataset.repo_id`                    | **必填。** 录制数据集所在的 Hub 仓库               |
-| `--dataset.push_to_hub`                | 是否在清理阶段推送到 Hub（默认为 true）            |
+| 参数                                   | 说明                                 | 默认值 |
+| -------------------------------------- | ------------------------------------ | ------ |
+| `--strategy.upload_every_n_episodes`   | 每 N 个 episode 推送到 Hub           | 5      |
+| `--strategy.target_video_file_size_mb` | episode 轮换时的目标视频文件大小     | auto   |
+| `--dataset.repo_id`                    | **必填。** 录制数据集所在的 Hub 仓库 | --     |
+| `--dataset.push_to_hub`                | 是否在清理阶段推送到 Hub             | true   |
 
-### Highlight（`--strategy.type=highlight`）
+### Highlight（`--strategy.type=highlight`）[[highlight---strategytypehighlight]]
 
 通过受内存限制的环形缓冲区按需录制的自主运行策略。机器人会持续运行，同时缓冲区保存最近 N 秒的遥测数据。按下保存键可刷出缓冲区内容并开始实时录制；再次按下该键即可保存 episode。
 
@@ -103,7 +113,7 @@ lerobot-rollout \
 | `--strategy.save_key`                  | 切换录制状态的按键（默认为 `s`）        |
 | `--strategy.push_key`                  | 将数据集推送到 Hub 的按键（默认为 `h`） |
 
-### DAgger（`--strategy.type=dagger`）
+### DAgger（`--strategy.type=dagger`）[[dagger---strategytypedagger]]
 
 人在回路的数据采集。在策略自主运行与通过遥操作器进行人工介入之间交替。介入帧会标记为 `intervention=True`。此策略需要遥操作器（`--teleop.type`）。
 
@@ -158,7 +168,7 @@ lerobot-rollout \
 | `--strategy.smooth_handover`         | 在暂停或开始纠正时平滑交接控制权（默认为 `true`）。对于在接管时根据当前机器人位姿重新建立参考的离合式遥操作，可将其禁用 |
 | `--teleop.type`                      | **必填。** 遥操作器类型                                                                                                 |
 
-### Episodic（`--strategy.type=episodic`）
+### Episodic（`--strategy.type=episodic`）[[episodic---strategytypeepisodic]]
 
 以 episode 为单位的录制，其行为与 `lerobot-record` 保持一致。策略在每个 episode 中驱动机器人；在 episode 之间的重置阶段，可选的遥操作器可以驱动机器人。
 
@@ -190,26 +200,78 @@ lerobot-rollout \
 | 参数                                            | 说明                                                                                                                        |
 | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `--dataset.num_episodes`                        | 要录制的 episode 数量                                                                                                       |
-| `--dataset.episode_time_s`                      | 每个录制 episode 的时长，单位为秒                                                                                           |
+| `--dataset.episode_time_s`                      | 每个录制 episode 的时长，单位为秒。当设置了 `--duration` 且未设置此项时，默认使用 `--duration`                              |
 | `--dataset.reset_time_s`                        | episode 之间重置阶段的时长，单位为秒                                                                                        |
 | `--teleop.type`                                 | 可选。用于在重置期间驱动机器人的遥操作器                                                                                    |
 | `--strategy.reset_to_initial_position`          | 是否在 episode 之间将机器人重置到初始位置                                                                                   |
-| `--strategy.smooth_leader_to_follower_handover` | 是否启用 leader -> follower 平滑交接行为。                                                                                  |
+| `--strategy.smooth_leader_to_follower_handover` | 是否开启或关闭主臂 -> 从臂的平滑交接行为。                                                                                  |
 | `--strategy.smooth_handover`                    | 在重置开始时将控制权平滑交给遥操作器（默认为 `true`）。对于在接管时根据当前机器人位姿重新建立参考的离合式遥操作，可将其禁用 |
+
+### 自带策略[[bring-your-own-strategy]]
+
+`--strategy.type` 可以接受环境中注册的任意策略，而不仅限于上述内置策略。一个策略由可经由 pip 安装的包中的两个类组成：一个注册到 `RolloutStrategyConfig` 的配置，以及一个名称去掉 `Config` 后缀后与之对应的 `RolloutStrategy` 子类——这与[自定义硬件](./integrate_hardware#the-4-core-conventions)采用的 `SomethingConfig`/`Something` 约定相同，并从配置所在的模块或包中解析。
+
+```python
+from dataclasses import dataclass
+from typing import ClassVar
+
+from lerobot.rollout import RolloutContext, RolloutStrategy, RolloutStrategyConfig
+
+
+@RolloutStrategyConfig.register_subclass("patrol")
+@dataclass
+class PatrolStrategyConfig(RolloutStrategyConfig):
+    dataset_mode: ClassVar[str] = "required"  # 引擎会为你创建数据集
+    legs: int = 2  # 会变为 --strategy.legs
+
+
+class PatrolStrategy(RolloutStrategy):
+    def run(self, ctx: RolloutContext) -> None:
+        ...  # 按节奏运行的控制循环：参见 RolloutStrategy.run 上的契约
+
+    def teardown(self, ctx: RolloutContext) -> None:
+        ctx.data.dataset.finalize()
+        self._teardown_hardware(ctx.hardware, ctx.runtime.cfg.return_to_initial_position)
+```
+
+配置会声明引擎代表策略安排哪些内容，因此 LeRobot 中无需知道其具体类型：
+
+| 声明                            | 作用                                                                                                                                 |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `dataset_mode`                  | `"none"`（默认）会拒绝 `--dataset.*` 参数，`"optional"` 会在提供这些参数时进行录制，`"required"` 会使 `--dataset.repo_id` 成为必填项 |
+| `requires_teleop`               | 使 `--teleop.type` 成为必填项                                                                                                        |
+| `supports_interactive`          | 允许 `--interactive=true`；此时 `run()` 必须遵守 `RolloutStrategy` 上记录的“可重启”契约                                              |
+| `requires_streaming_encoding()` | 当帧从控制循环内部写入时返回 `True`：会强制开启 `--dataset.streaming_encoding`                                                       |
+| `extra_dataset_features()`      | 策略拥有的数据集列（例如 DAgger 的 `intervention`）；每个录制帧都必须携带这些列                                                      |
+
+将发行包命名为 `lerobot_strategy_<name>`，`lerobot-rollout` 会在解析 CLI 之前导入该包——只有它的 `__init__.py` 会运行，因此请在那里导入配置。如果包名不同，可通过 `--strategy.discover_packages_path=<package>` 加载该包（包括其子模块）。策略的 dataclass 字段会成为 `--strategy.*` 参数：
+
+```bash
+lerobot-rollout \
+    --strategy.type=patrol \
+    --strategy.legs=3 \
+    --policy.path=${HF_USER}/my_policy \
+    --robot.type=so100_follower \
+    --robot.port=/dev/ttyACM0 \
+    --dataset.repo_id=${HF_USER}/rollout_patrol \
+    --dataset.single_task="patrol the aisle"
+```
+
+`SentryStrategy`（可录制、可安全用于交互）和 `BaseStrategy`（不录制）是可供参考复制的实现；`lerobot.rollout.strategies` 中的 `send_next_action`、`safe_push_to_hub` 和 `estimate_max_episode_seconds` 是它们所依赖的辅助函数。
 
 ---
 
-## 推理后端
+## 推理后端[[inference-backends]]
 
 使用 `--inference.type=<name>` 选择后端。所有策略都支持这两种后端。
 
-### 同步（默认）
+### 同步（默认）[[sync-default]]
 
 每个控制周期调用一次策略。主循环会一直阻塞，直到计算出动作。
 
 支持所有策略，无需额外参数。
 
-### 实时分块（`--inference.type=rtc`）
+### 实时分块（`--inference.type=rtc`）[[real-time-chunking---inferencetypertc]]
 
 后台线程会异步生成动作块。策略并行计算下一个动作块时，主控制循环会轮询下一个已就绪的动作。
 
@@ -230,39 +292,184 @@ lerobot-rollout \
     --device=cuda
 ```
 
-| 参数                                        | 说明                                             |
-| ------------------------------------------- | ------------------------------------------------ |
-| `--inference.rtc.execution_horizon`         | 与前一个动作块进行混合的步数（默认为因策略而异） |
-| `--inference.rtc.max_guidance_weight`       | 一致性约束强度（默认为因策略而异）               |
-| `--inference.rtc.prefix_attention_schedule` | 混合计划：`LINEAR`、`EXP`、`ONES`、`ZEROS`       |
-| `--inference.queue_threshold`               | 触发背压前的最大队列大小（默认为 30）            |
+| 参数                                        | 说明                                                             |
+| ------------------------------------------- | ---------------------------------------------------------------- |
+| `--inference.rtc.execution_horizon`         | 与前一个动作块进行混合的步数（默认为因策略而异）                 |
+| `--inference.rtc.mode`                      | `guided`（默认），或针对兼容 Pi05 检查点使用训练前缀的 `trained` |
+| `--inference.rtc.max_guidance_weight`       | 一致性约束强度（默认为因策略而异）                               |
+| `--inference.rtc.prefix_attention_schedule` | 混合计划：`LINEAR`、`EXP`、`ONES`、`ZEROS`                       |
+| `--inference.queue_threshold`               | 背压阈值；训练式 RTC 至少需要达到其最大延迟                      |
 
 详细参数调优方法请参阅[实时分块](./rtc)指南。
 
 ---
 
-## 常用参数
+## 交互式会话[[interactive-sessions]]
 
-| 参数                              | 说明                                                            | 默认值 |
-| --------------------------------- | --------------------------------------------------------------- | ------ |
-| `--policy.path`                   | **必填。** HF Hub 模型 ID 或本地检查点路径                         | --     |
-| `--robot.type`                    | **必填。** 机器人类型（例如 `so100_follower`、`koch_follower`） | --     |
-| `--robot.port`                    | 机器人的串口                                                    | --     |
-| `--robot.cameras`                 | 摄像头配置（JSON 字典）                                         | --     |
-| `--fps`                           | 控制循环频率                                                    | 30     |
-| `--duration`                      | 运行时长，单位为秒（`0` 表示无限运行）                          | 0      |
-| `--device`                        | Torch 设备（`cpu`、`cuda`、`mps`）                              | auto   |
-| `--task`                          | 任务描述（未提供数据集时使用）                                  | --     |
-| `--display_data`                  | 将遥测数据流式传输到 Rerun 进行可视化                           | false  |
-| `--display_ip` / `--display_port` | 远程 Rerun 服务器地址                                           | --     |
-| `--interpolation_multiplier`      | 动作插值因子                                                    | 1      |
-| `--use_torch_compile`             | 启用 `torch.compile` 进行推理                                   | false  |
-| `--resume`                        | 恢复之前的录制会话                                              | false  |
-| `--play_sounds`                   | 为事件启用语音合成                                              | true   |
+添加 `--interactive=true` 可从终端驱动 rollout，而不是立即启动。硬件会照常连接，策略也会照常加载，但**机器人会保持静止，直到你输入 `/start`**——当你希望先摆放场景、在多次尝试之间重新指示策略，或在不重复支付加载时间的情况下运行多次拍摄时，这会很有用。
+
+```bash
+lerobot-rollout \
+    --strategy.type=base \
+    --policy.path=${HF_USER}/my_smolvla_policy \
+    --robot.type=so100_follower \
+    --robot.port=/dev/ttyACM0 \
+    --robot.cameras="{ front: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30}}" \
+    --task="pick up the cube" \
+    --interactive=true
+```
+
+| 命令                | 操作                                                                                                                |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `/start`            | 启动（或重启）策略控制循环                                                                                          |
+| `/subtask <text>`   | 在不停止的情况下更改策略遵循的指令。不带参数会打印当前任务。仅影响以语言为条件的策略（SmolVLA、π0/π0.5 及类似模型） |
+| `/vqa <text>`       | 就策略当前所见内容向策略提问。仅在运行进行中可用，且仅适用于带文本头的策略                                          |
+| `/autosteer <goal>` | 交给策略一个高层级目标，并让它自行选择子任务。`/autosteer off` 会交回控制权；不带参数会报告当前目标                 |
+| `/reset`            | 停止移动，将机器人返回到启动位置，并恢复 `--task` 指令                                                              |
+| `/stop`             | 结束会话并运行正常的关闭例程                                                                                        |
+| `/help`             | 列出命令                                                                                                            |
+
+```text
+> /start
+Rollout running — task 'pick up the cube'. /subtask <text> to change it, ...
+> /subtask put the cube in the box
+Task: 'pick up the cube' → 'put the cube in the box' (applies from the next policy inference)
+> /vqa is the cube inside the box?
+Asked: 'is the cube inside the box?' — answering from the next observation...
+Q: is the cube inside the box?
+A: No — the cube is on the table to the left of the box.
+> /reset
+Task restored to 'pick up the cube'
+Resetting — returning the robot to its initial position...
+Robot reset — holding at initial position. /start to run.
+> /stop
+```
+
+以 `>` 开头的行是你输入的内容；会话本身不会渲染提示符。
+
+`Ctrl-C` 仍会照常关闭，关闭 stdin（`Ctrl-D`，或管道脚本结束）会结束会话——因此管道脚本必须在预期时长内保持 stdin 打开：
+
+```bash
+(printf '/start\n'; sleep 60; printf '/stop\n') | lerobot-rollout ... --interactive=true
+```
+
+**`/subtask`** 会从下一次推理开始生效。使用 `--inference.type=sync` 时，预计算的动作块会被丢弃，因此切换会在下一个控制 tick 生效；使用 `rtc` 时，新动作块会与上一个动作块剩余的前缀混合，因此会在一次推理内生效，运动保持连续（使用 `--inference.rtc.enabled=false` 时，队列中的动作块会先排空，使切换最多延迟一个动作块）。
+
+使用 `--use_torch_compile=true` 时，如果某条指令分词后的长度不同，可能会触发重新编译，并导致推理暂停与原始预热一样长的时间——如果你预计会频繁重新指示，请关闭编译。
+
+`/vqa` 和 `/autosteer` 需要带文本头的策略（即 `PreTrainedPolicy.generate_text()` 的实现）；目前 LeRobot 内置策略尚未提供这样的策略，因此除非你的策略实现了它，否则这两个命令都会被拒绝。
+
+**`/vqa`** 会从下一次观测开始作答，并在准备好时打印，因此你在此期间可以继续输入；同一时间只能有一个问题在处理中（autosteer 自己的查询也共用该槽位）。文本生成远比一个控制 tick 慢，因此机器人会先执行完队列中的动作，然后保持位置，直到答案返回，而这段时间会计入 `--duration`。仅当运行进行中时才接受问题——空闲的引擎没有当前视图——而某个问题在片段结束时仍未回答，就会被丢弃并报告。
+
+**`/autosteer`** 会交给策略一个目标，并每隔 `--autosteer_interval_s` 秒（默认 10）向其询问下一个子任务，再通过与 `/subtask` 相同的路径应用每个子任务，并在聊天中公布。每次查询都是一次完整的文本生成，因此该间隔是一个成本调节旋钮：值越低，重新规划越快，但控制循环中用于生成文本而非执行动作的时间也越多。计划进度保存在策略中，而不是 rollout 中，因此计划会随片段一起结束；序列器也会在 `/reset`、`/subtask`、`/autosteer off` 以及首次规划失败时停止。
+
+**会话运行期间，低于 ERROR 级别的日志会被静音**，以免常规输出与你正在输入的内容交错；错误和致命推理失败仍会显示，会话结束后会恢复正常日志记录。此时[节奏摘要](#cadence-reporting)会改为在聊天中打印；如果不使用 `--interactive` 运行，则会恢复实时日志。
+
+会话可通过 SSH 以及在无头机器上运行——无需显示服务器。
+
+**交互期间录制。** `--strategy.type=sentry` 也接受 `--interactive=true`，并会在你操控期间持续录制：每个 `/start`…`/reset` 片段都会保存完整 episode，外加最后一个不完整 episode，且数据集会保持打开直到关闭。帧会携带实际发送动作的任务来源，因此已在旧任务下排队或插值的动作会保留旧标签。
+
+```bash
+lerobot-rollout \
+    --strategy.type=sentry \
+    --policy.path=${HF_USER}/my_smolvla_policy \
+    --robot.type=so100_follower \
+    --robot.port=/dev/ttyACM0 \
+    --dataset.repo_id=${HF_USER}/rollout_cube_sessions \
+    --task="pick up the cube" \
+    --interactive=true
+```
+
+其他录制策略（episodic、DAgger、highlight）不受支持：它们会绑定自己的键盘控制，并在 `run()` 退出时完成数据集，因此无法逐片段重新启动。
+
+### 以编程方式控制[[programmatic-control]]
+
+`RolloutController` 以库 API 的形式暴露相同的操作——线程安全的 `start()` / `reset()` / `stop()` / `set_task()`，外加一个 `RolloutEvent` 回调，且不涉及 stdin、打印或日志静音：
+
+```python
+from threading import Event, Thread
+
+from lerobot.rollout import (
+    LinkedEvent,
+    RolloutController,
+    RolloutEvent,
+    build_rollout_context,
+    create_strategy,
+)
+
+parent = Event()  # 你的应用程序的关闭信号
+ctx = build_rollout_context(cfg, LinkedEvent(parent))  # 加载策略，连接机器人
+strategy = create_strategy(cfg.strategy)
+strategy.setup(ctx)
+
+controller = RolloutController(strategy, ctx, on_event=print)  # 或你自己的观察者
+serve_thread = Thread(target=controller.serve)  # serve() 会阻塞；可在任意位置运行它
+serve_thread.start()
+
+controller.start()                        # 机器人开始执行策略
+controller.set_task("grab the red cube")  # 在运行中途重新指示
+controller.reset()                        # 停止移动，返回原位，保持预热
+controller.stop()                         # 结束 serve()
+
+serve_thread.join()
+strategy.teardown(ctx)  # teardown 由调用方负责
+```
+
+`RolloutController` 要求上下文的关闭事件是 `LinkedEvent`，并按上述方式构建：控制器通过其本地标志结束运行片段，而你的 `parent` 事件仍会强制完全关闭。除非需要语音播报，否则请设置 `play_sounds=False`。
 
 ---
 
-## 以编程方式调用
+## 常用参数[[common-flags]]
+
+| 参数                              | 说明                                                             | 默认值 |
+| --------------------------------- | ---------------------------------------------------------------- | ------ |
+| `--policy.path`                   | **必填。** HF Hub 模型 ID 或本地检查点路径                       | --     |
+| `--robot.type`                    | **必填。** 机器人类型（例如 `so100_follower`、`koch_follower`）  | --     |
+| `--robot.port`                    | 机器人的串口                                                     | --     |
+| `--robot.cameras`                 | 摄像头配置（JSON 字典）                                          | --     |
+| `--fps`                           | 策略推理和数据集录制频率                                         | 30     |
+| `--duration`                      | 运行时长，单位为秒（0 表示无限运行；交互式模式下按片段计）       | 0      |
+| `--device`                        | Torch 设备（`cpu`、`cuda`、`mps`）                               | auto   |
+| `--task`                          | 任务描述（未提供数据集时使用）                                   | --     |
+| `--display_data`                  | 将遥测数据流式传输到 Rerun 进行可视化                            | false  |
+| `--display_ip` / `--display_port` | 远程 Rerun 服务器地址                                            | --     |
+| `--interpolation_multiplier`      | 每个策略动作对应的机器人命令数（以 `fps × N` Hz 进行控制）       | 1      |
+| `--interactive`                   | 在 stdin 上进行聊天会话；机器人空闲直到 `/start`（base、sentry） | false  |
+| `--use_torch_compile`             | 启用 `torch.compile` 进行推理                                    | false  |
+| `--resume`                        | 恢复之前的录制会话                                               | false  |
+| `--play_sounds`                   | 为事件启用语音合成                                               | true   |
+
+---
+
+## 节奏报告[[cadence-reporting]]
+
+每种策略都会报告其控制循环实际达到的性能，`lerobot-record`、`lerobot-teleoperate` 和 `lerobot-replay` 也是如此——它们都通过同一个计时器按节奏运行。每个保存的 episode 都会获得一行摘要，而循环结束时——包括按下 `Ctrl-C` 时——会输出一个覆盖整个运行的块：
+
+```
+Cadence (episode 1): 29.84 Hz policy vs 30 Hz target · 1200 ticks, 20.1 s measured · 6/598 cycles over the 33.3 ms budget (work mean 18.7 ms, worst 48.1 ms)
+Cadence (episode 2): 29.84 Hz policy vs 30 Hz target · 1200 ticks, 20.1 s measured · 6/599 cycles over the 33.3 ms budget (work mean 18.7 ms, worst 48.1 ms)
+Cadence summary — whole run, 2 episodes · target 30 Hz × 2 (16.7 ms tick slot, 33.3 ms cycle budget): 2400 ticks, 1197 cycles judged
+  effective cadence: 29.84 Hz policy / 59.67 Hz commands over 40.2 s measured
+  cycles over the 33.3 ms work budget: 12/1197 (1.0%) — work mean 18.7 ms, worst 48.1 ms
+  ticks over their 16.7 ms slot: 40/2400 (costs interpolation smoothness only)
+  loop-body steps (share of measured work):
+    observe      mean   3.13 ms · worst   9.00 ms ·  31.7% of work · 2400 calls
+    process_obs  mean   0.50 ms · worst   1.00 ms ·   5.1% of work · 2400 calls
+    infer        mean   5.18 ms · worst  40.00 ms ·  52.4% of work · 2400 calls
+    send         mean   0.40 ms · worst   0.40 ms ·   4.1% of work · 2400 calls
+    record       mean   0.67 ms · worst 620.00 ms ·   6.8% of work · 2402 calls
+  pacing headroom: 7.4 ms slept per tick on average (max 13.0 ms) — near zero means the loop is saturated
+```
+
+从上到下阅读：**有效节奏**是相对于 `--fps` 实际达到的值，**超出预算的循环数**是循环无法保持该节奏的频率，**步骤明细**说明时间花在哪里，而**节奏余量**接近零意味着没有余量来吸收一次缓慢的 tick。`infer` 占比高指向策略或设备；`observe` 占比高指向摄像头。某个步骤的 `worst` 远高于其 `mean` 通常是一次性事件——在上例中，`record` 每帧为 0.67 ms，而 620 ms 的离群值是关闭 episode 时阻塞的 `save_episode`。
+
+这里的 _cycle_（循环）是指一个策略动作所对应的一组 tick（数量为 `--interpolation_multiplier`）。只有超过 `1/fps` 预算的完整 cycle 才可能让你丢帧；单个 tick 超出其时间槽只会让插值运动不够平滑，这就是两者分开计数的原因。没有插值时，一个 cycle 就是单个 tick，因此报告会去掉这一区分，并全程按 tick 计数。
+
+在[交互式会话](#interactive-sessions)中，每个 `/start` 片段都有自己的计时器，因此报告会按片段（`/reset`、`/stop` 或 `--duration`）在聊天中输出一次，而不是每个进程输出一次。
+
+---
+
+## 以编程方式调用[[programmatic-usage]]
 
 对于自定义部署（例如使用运动学处理器），可以直接调用 rollout 模块 API：
 

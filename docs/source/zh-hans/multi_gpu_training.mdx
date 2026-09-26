@@ -1,0 +1,179 @@
+# 多 GPU 训练[[multi-gpu-training]]
+
+LeRobot 通过 [Hugging Face Accelerate](https://huggingface.co/docs/accelerate) 在多个 GPU 上进行训练。支持三种数据并行（data-parallel）布局：
+
+| 布局     | 作用                                         | 配置                                                    |
+| -------- | -------------------------------------------- | ------------------------------------------------------- |
+| **DDP**  | 在每个 GPU 上复制完整模型                    | 任何多 GPU 启动时的默认值                               |
+| **FSDP** | 在 GPU 间分片（shard）参数、梯度和优化器状态 | `--parallelism.dp_shard=N`                              |
+| **HSDP** | 在 GPU 组内分片，并在组间复制                | `--parallelism.dp_replicate=R --parallelism.dp_shard=S` |
+
+## 安装[[installation]]
+
+`accelerate` 包含在 `training` 额外依赖（extra）中：
+
+```bash
+pip install 'lerobot[training]'
+```
+
+## 启动[[launching]]
+
+分布式训练既可以通过 `torchrun` 启动，也可以通过 `accelerate launch` 启动。Accelerate 仅用作普通启动器（plain launcher）：它不管理训练配置，所有分布式训练设置都位于 LeRobot 自己的配置系统中。
+
+使用 `torchrun`：
+
+```bash
+torchrun --nproc-per-node=2 $(which lerobot-train) \
+  --dataset.repo_id=${HF_USER}/my_dataset \
+  --policy.type=act \
+  --policy.repo_id=${HF_USER}/my_trained_policy \
+  --output_dir=outputs/train/act_multi_gpu \
+  --job_name=act_multi_gpu \
+  --wandb.enable=true
+```
+
+使用 `accelerate launch`（作为普通启动器）：
+
+```bash
+accelerate launch --num_processes=2 $(which lerobot-train) \
+  --dataset.repo_id=${HF_USER}/my_dataset \
+  --policy.type=act \
+  --policy.repo_id=${HF_USER}/my_trained_policy \
+  --output_dir=outputs/train/act_multi_gpu \
+  --job_name=act_multi_gpu \
+  --wandb.enable=true
+```
+
+不指定任何 `--parallelism.*` 标志时，多进程启动会运行普通 DDP。多节点运行使用标准的 `torchrun --nnodes/--node-rank/--rdzv-endpoint` 标志（或 `accelerate launch --num_machines/--machine_rank/--main_process_ip`）。
+
+> [!WARNING]
+> Accelerate 的 YAML 配置文件（`accelerate launch --config_file some.yaml`、`accelerate config`）不受支持。它们通过环境变量配置引擎，绕过 LeRobot 的配置系统，因此 `train_config.json` 将不再描述某次运行实际使用的设置。因此，当设置了 [accelerate 环境变量](https://huggingface.co/docs/accelerate/usage_guides/fsdp) 时，`lerobot-train` 会拒绝启动。请改为将设置放入 `--parallelism.*` / `--accelerator.*` 标志中，或设置 `LEROBOT_ALLOW_ACCELERATE_ENV=1` 以确认该覆盖并继续运行。
+
+## 批次语义、学习率与步数[[batch-semantics-learning-rate-and-steps]]
+
+每个 `dp_replicate × dp_shard` 数据并行工作进程都会在每一步加载自己的 `--batch_size` 微批次（micro-batch），因此一个训练步会消耗 `batch_size × dp_world_size` 个样本，而每次优化器更新会消耗这些样本的 `× gradient_accumulation_steps` 倍：
+
+```
+effective_batch_size = batch_size × dp_world_size × gradient_accumulation_steps
+```
+
+训练横幅会在启动时打印这个因式分解。`--steps` 统计的是循环步数（每个工作进程的微批次数量），而不是优化器更新次数。
+
+梯度累积（gradient accumulation）是一等标志：
+
+```bash
+torchrun --nproc-per-node=2 $(which lerobot-train) \
+  --batch_size=8 --accelerator.gradient_accumulation.steps=4 ...
+```
+
+**当有效批次大小增长时，LeRobot 不会自动缩放学习率或步数**。如果你进行了扩容并希望获得等效训练，请手动调整，例如使用 2 个 GPU 时：将 `--optimizer.lr` 加倍（线性缩放），或将 `--steps` 减半。
+
+## 分片训练（FSDP）[[sharded-training-fsdp]]
+
+如果模型太大，无法使用 DDP 训练，请使用 FSDP2 对其进行分片：
+
+```bash
+torchrun --nproc-per-node=4 $(which lerobot-train) \
+  --dataset.repo_id=${HF_USER}/my_dataset \
+  --policy.type=<your_policy> \
+  --parallelism.dp_shard=4 \
+  --accelerator.mixed_precision=bf16 \
+  --output_dir=outputs/train/my_policy_fsdp
+```
+
+`--parallelism.dp_shard=-1` 会在启动器启动的任意数量的进程上进行分片。
+
+`--accelerator.mixed_precision` 同时支持 `bf16` 和 `fp16`。详情见[混合精度](./torch_accelerators#mixed-precision)
+
+### 封装单元[[wrap-units]]
+
+FSDP 以单元（通常是重复的 transformer 块）为单位对模型进行分片，并在前向/反向传播期间一次收集一个单元。策略（policy）通过策略类上的 `_fsdp_wrap_modules` 声明其封装单元（wrap units）。例如，ACT 声明 `["ACTEncoderLayer", "ACTDecoderLayer"]`，FastWAM 声明 `["MoTLayer"]`。对于没有 `_fsdp_wrap_modules` 声明的策略，请传入下面的某个标志。你可以显式指定模块类名，也可以改为使用基于大小的策略：
+
+```bash
+--accelerator.fsdp.wrap_modules='["MyTransformerBlock"]'   # 显式类名
+--accelerator.fsdp.min_num_params=1000000                  # 或者：封装所有参数超过 1M 的子模块
+```
+
+如果某个策略没有声明 `_fsdp_wrap_modules`，并且没有传入 `--accelerator.fsdp.wrap_modules` 或 `--accelerator.fsdp.min_num_params`，那么运行会在启动时失败，而不是静默地只封装根模块（这会丧失所有分片带来的内存节省）。
+
+其他分片设置：
+
+- `--accelerator.fsdp.reshard_after_forward`：是否在前向传播后保持每个单元的参数常驻。
+- `--accelerator.fsdp.cpu_offload`：将参数、梯度和优化器状态保留在 CPU 上。
+- `--accelerator.fsdp.ignored_modules`：一个正则表达式，用于指定保持不分片的模块路径。
+
+### HSDP[[hsdp]]
+
+混合分片数据并行（Hybrid Sharded Data Parallel，HSDP）：参数、梯度和优化器状态在 `dp_shard` 个 rank 之间分片，并且该分片会复制 `dp_replicate` 次。参数 all-gather 和梯度 reduce-scatter 留在分片组内部；只有用于同步副本的 all-reduce 会跨组进行。这两个维度必须相乘得到世界大小：
+
+```bash
+# 16 个 GPU = 2 个节点 × 8：在每个节点内分片，跨节点复制
+torchrun --nnodes=2 --nproc-per-node=8 ... $(which lerobot-train) \
+  --parallelism.dp_replicate=2 --parallelism.dp_shard=8 ...
+```
+
+## 检查点[[checkpoints]]
+
+每个检查点（checkpoint）都包含一个 `pretrained_model/` 目录和一个 `training_state/` 目录：
+
+```text
+005000/  # 该检查点对应的训练步
+├── pretrained_model/
+│   ├── config.json  # 策略配置
+│   ├── train_config.json  # 完整训练配置
+│   ├── model.safetensors  # 完整权重（checkpoint_format ∈ {safetensors, safetensors_dcp}，或任何非分片运行）
+│   ├── pytorch_model_fsdp_0/  # DCP 权重分片（checkpoint_format ∈ {dcp, safetensors_dcp}）
+│   ├── policy_preprocessor.json  # 预处理器配置（当运行有预处理器时）
+│   ├── policy_preprocessor_step_*.safetensors  # 有状态预处理器步骤的状态
+│   ├── policy_postprocessor.json  # 后处理器配置（当运行有后处理器时）
+│   └── policy_postprocessor_step_*.safetensors  # 有状态后处理器步骤的状态
+└── training_state/
+    ├── optimizer_param_groups.json  # 优化器参数组（非分片运行）
+    ├── optimizer_state.safetensors  # 优化器状态（非分片运行）
+    ├── optimizer_0/  # DCP 优化器分片（分片运行）
+    ├── rng_state.safetensors  # rng 状态
+    ├── scheduler_state.json  # 调度器状态（当运行有调度器时）
+    ├── scaler_state.json  # fp16 损失缩放器状态（仅 mixed_precision=fp16）
+    └── training_step.json  # 步数 + dp_world_size/batch_size/grad_accum/precision + 拓扑
+```
+
+在单 GPU 或 DDP 训练期间，流水线会将每个状态字典（state dict）序列化为单个文件：模型的 `model.safetensors`，以及优化器的 `optimizer_state.safetensors`。
+
+在分片训练期间，优化器状态会作为 DCP 分片保存在 `training_state/optimizer_0/` 下，而 `pretrained_model/` 下模型的布局可以通过 `--checkpoint_format` 配置：
+
+| `--checkpoint_format`  | 权重产物                            | 使用场景                                            |
+| ---------------------- | ----------------------------------- | --------------------------------------------------- |
+| `safetensors` _(默认)_ | 仅单个 `model.safetensors`          | 你希望每个检查点都能立即通过 `from_pretrained` 加载 |
+| `dcp`                  | 仅 `pytorch_model_fsdp_0/` 分片目录 | 收集完整权重会使保存和恢复过慢                      |
+| `safetensors_dcp`      | 两者                                | 你希望快速恢复 _并且_ 检查点可立即加载              |
+
+关于分片运行中收集（gathered）得到的 `safetensors` 检查点，有两点需要了解：
+
+- **它们存储 fp32 权重。** 在混合精度训练下，FSDP 会保留一份 fp32 主副本，检查点会保存该主副本，以确保训练能够一致地恢复。
+- 收集操作是集合式的（所有 rank 都参与），但只有主进程会写入。
+
+### 转换 DCP 检查点[[converting-dcp-checkpoints]]
+
+`lerobot-convert-dcp` 会将 DCP 分片目录合并为常规的 `model.safetensors`，离线进行且无需 GPU：
+
+```bash
+lerobot-convert-dcp --checkpoint_dir=outputs/train/run/checkpoints/005000
+lerobot-convert-dcp --checkpoint_dir=... --delete_dcp=true --push_to_hub=${HF_USER}/my_policy
+```
+
+`--push_to_hub` 会将转换后的目录发布为模型仓库。
+
+### 恢复训练[[resuming]]
+
+使用 `--resume=true --config_path=.../checkpoints/last/pretrained_model/train_config.json` 进行恢复。从 DCP 检查点恢复支持将模型和优化器状态重新分片到 _当前_ 拓扑，这意味着你可以使用不同的 `dp_replicate/dp_shard` 拆分进行恢复。数据采样器始终可以在正确的 epoch 和 offset 处恢复，但只有在世界大小和批次大小与原始运行匹配时才是 _样本精确_ 的（否则会记录一条警告）。
+
+> [!NOTE]
+> LeRobot 0.6.x 及更早版本写入的 FSDP 检查点使用了不同的磁盘布局（收集后的完整优化器状态），并且**无法恢复**。
+
+## 注意事项[[notes]]
+
+- 检查点保存和训练结束发布都是集合式的（每个 rank 都会进入这些操作）。收集后的权重、附属文件（sidecar files）和 Hub 上传仅由主进程写入。
+- 指标在记录前会跨 rank 进行归约：损失取平均值，`samples/s` 报告集群范围的吞吐量。
+- 无论进程数量多少，学习率调度都会在每个训练步推进一次（`step_scheduler_with_optimizer=False` 已内置）。
+
+有关底层机制的背景信息，请参阅 [Accelerate FSDP 指南](https://huggingface.co/docs/accelerate/usage_guides/fsdp)。如需深入了解大规模训练，请查看 [Ultrascale Playbook](https://huggingface.co/spaces/nanotron/ultrascale-playbook)。

@@ -1,0 +1,22 @@
+# 电机[[motors]]
+
+`MotorsBus` 是串行总线上舵机（servo）链的底层接口。机器人用它读取位置
+并写入目标位置；除非你在添加硬件，否则很少会直接接触它。
+
+有关添加新总线，请参阅[自带硬件](../integrate_hardware)；有关特定设备的说明，请参阅[更新 Feetech 固件](../feetech)和 [Damiao 电机与 CAN 总线](../damiao)。
+
+## MotorsBus[[motorsbus]]
+
+[[autodoc]] lerobot.motors.motors_bus.MotorsBus
+
+## Motor[[motor]]
+
+[[autodoc]] lerobot.motors.Motor
+
+## MotorCalibration[[motorcalibration]]
+
+[[autodoc]] lerobot.motors.MotorCalibration
+
+## MotorNormMode[[motornormmode]]
+
+[[autodoc]] lerobot.motors.MotorNormMode
