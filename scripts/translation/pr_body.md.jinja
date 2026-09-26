@@ -94,14 +94,17 @@ These pages are new, so every passage is a first translation.
 
 #### Review the English changes
 
-The English sources are not part of this PR, so their diffs are below. The matching translation
-change is in the **Files changed** tab, and the preview link shows it rendered.
-Each block carries the `git diff` that produced it, so you can reproduce it locally.
+The English sources are not part of this PR. Content diffs are below, and title-only changes are
+identified separately. The matching translation change is in the **Files changed** tab, and the
+preview link shows it rendered. Content diff blocks include a command to reproduce them locally.
 {% for doc in changes %}
 
 <details>
 <summary>{{ doc.emoji }} <code>{{ doc.name }}</code> — {{ doc.preview_html }} · {{ doc.english_html }} — <code>{{ doc.change_plain }}</code>{{ doc.note }}</summary>
-{% if not doc.diff %}
+{% if doc.title_only %}
+
+Only the English sidebar title changed in `_toctree.yml`.
+{% elif not doc.diff %}
 
 Too large to inline. Reproduce it with:
 {% endif %}
