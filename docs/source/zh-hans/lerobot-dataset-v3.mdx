@@ -1,4 +1,4 @@
-# LeRobotDataset v3.0
+# LeRobotDataset v3.0[[lerobotdataset-v30]]
 
 `LeRobotDataset v3.0` 是一种用于机器人学习数据的标准化格式。它提供对多模态时序数据、感觉运动信号和多摄像头视频的统一访问，以及丰富的元数据，支持在 Hugging Face Hub 上进行索引、搜索和可视化。
 
@@ -10,22 +10,24 @@
 - 使用 `StreamingLeRobotDataset` 无需下载即可流式访问数据集
 - 在训练时应用图像变换进行数据增强
 - 将现有 `v2.1` 数据集迁移到 `v3.0`
+- 尝试其他 `LeRobotDataset` 格式和实现，例如 Lance
 
-## v3 的新特性
+## v3 的新特性[[whats-new-in-v3]]
 
 - **基于文件的存储**：每个 Parquet/MP4 文件包含多个片段（v2 每个片段对应一个文件）。
 - **关系型元数据**：片段边界和查找通过元数据解析，而非文件名。
 - **Hub 原生流式访问**：通过 `StreamingLeRobotDataset` 直接从 Hub 消费数据集。
 - **更低的文件系统压力**：更少、更大的文件 ⇒ 更快的初始化，规模扩展时问题更少。
 - **统一的组织结构**：清晰的目录布局，数据和视频的路径模板保持一致。
+- **数据集存储后端**：数据集也可以存储为 [LanceDB](https://lancedb.com) 表，以便直接从对象存储进行随机访问和索引（参见 [LanceDB 数据集后端](#lancedb-dataset-backend)）。
 
-## 安装
+## 安装[[installation]]
 
 `LeRobotDataset v3.0` 将包含在 `lerobot >= 0.4.0` 中。
 
 在稳定版本发布之前，你可以按照[从源代码构建的说明](./installation#from-source)使用 main 分支。
 
-## 录制数据集
+## 录制数据集[[record-a-dataset]]
 
 运行以下命令使用 SO-101 录制数据集并推送到 Hub：
 
@@ -43,13 +45,13 @@ lerobot-record \
   --dataset.num_episodes=5 \
   --dataset.single_task="Grab the black cube" \
   --dataset.streaming_encoding=true \
-  # --dataset.vcodec=auto \
   --dataset.encoder_threads=2
+# 可选：--dataset.rgb_encoder.vcodec=auto
 ```
 
 详细信息请参阅[录制指南](./il_robots#record-a-dataset)。
 
-## 格式设计
+## 格式设计[[format-design]]
 
 v3 的核心原则是**存储与用户 API 解耦**：数据以高效方式存储（少量大文件），而公共 API 提供直观的片段级访问。
 
@@ -74,7 +76,7 @@ v3 的核心原则是**存储与用户 API 解耦**：数据以高效方式存�
   </figure>
 </div>
 
-### 目录结构（简化版）
+### 目录结构（简化版）[[directory-layout-simplified]]
 
 - **`meta/info.json`**：规范模式（特征、形状/数据类型）、FPS、代码库版本，以及定位数据/视频分片的**路径模板**。
 - **`meta/stats.json`**：用于归一化的全局特征统计信息（均值/标准差/最小值/最大值），通过 `dataset.meta.stats` 访问。
@@ -83,13 +85,13 @@ v3 的核心原则是**存储与用户 API 解耦**：数据以高效方式存�
 - **`data/`**：逐帧 **Parquet** 分片，每个文件通常包含**多个片段**。
 - **`videos/`**：按摄像头划分的 **MP4** 分片，每个文件通常包含**多个片段**。
 
-## 加载数据集用于训练
+## 加载数据集用于训练[[load-a-dataset-for-training]]
 
 `LeRobotDataset` 返回 PyTorch 张量的 Python 字典，并与 `torch.utils.data.DataLoader` 集成。以下是使用示例：
 
 ```python
 import torch
-from lerobot.datasets.lerobot_dataset import LeRobotDataset
+from lerobot.datasets import LeRobotDataset
 
 repo_id = "yaak-ai/L2D-v3"
 
@@ -130,15 +132,31 @@ for batch in data_loader:
     # model.forward(batch)
 ```
 
-## 流式访问数据集（无需下载）
+## 流式访问数据集（无需下载）[[stream-a-dataset-no-downloads]]
 
 使用 `StreamingLeRobotDataset` 直接从 Hub 迭代数据，无需本地副本。这允许在不将大型数据集下载到磁盘或加载到内存的情况下进行流式访问，是新数据集格式的核心特性。
 
 ```python
-from lerobot.datasets.streaming_dataset import StreamingLeRobotDataset
+from lerobot.datasets import StreamingLeRobotDataset
 
 repo_id = "yaak-ai/L2D-v3"
 dataset = StreamingLeRobotDataset(repo_id)  # 直接从 Hub 流式传输
+```
+
+存储在 [HF Storage Bucket](https://huggingface.co/docs/hub/storage-buckets)（`hf://buckets/`）中的数据集，也可以通过传入 `repo_type="bucket"` 以相同方式流式读取：
+
+```python
+dataset = StreamingLeRobotDataset("my-org/my-bucket", repo_type="bucket")
+```
+
+这两种选项都可以在 `lerobot-train` 中使用：通过 `--dataset.streaming=true` 启用流式读取，通过 `--dataset.repo_type=bucket` 从存储桶而不是 Hub 数据集仓库进行流式读取：
+
+```bash
+lerobot-train \
+  --dataset.repo_id=my-org/my-bucket \
+  --dataset.repo_type=bucket \
+  --dataset.streaming=true \
+  ...
 ```
 
 <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
@@ -154,21 +172,21 @@ dataset = StreamingLeRobotDataset(repo_id)  # 直接从 Hub 流式传输
   </figure>
 </div>
 
-## 图像变换
+## 图像变换[[image-transforms]]
 
 图像变换是在训练期间应用于摄像头帧的数据增强操作，用于提升模型的鲁棒性和泛化能力。LeRobot 支持多种变换，包括亮度、对比度、饱和度、色调和锐度调整。
 
-### 在数据集创建/录制时使用变换
+### 在数据集创建/录制时使用变换[[using-transforms-during-dataset-creationrecording]]
 
 目前，变换仅在**训练时**应用，录制时不应用。创建或录制数据集时，原始图像直接存储，不做变换。这样你可以在不重新录制数据的情况下尝试不同的增强方案。
 
-### 通过 API 为现有数据集添加变换
+### 通过 API 为现有数据集添加变换[[adding-transforms-to-existing-datasets-api]]
 
 加载训练数据集时使用 `image_transforms` 参数：
 
 ```python
-from lerobot.datasets.lerobot_dataset import LeRobotDataset
-from lerobot.datasets.transforms import ImageTransforms, ImageTransformsConfig, ImageTransformConfig
+from lerobot.datasets import LeRobotDataset
+from lerobot.transforms import ImageTransforms, ImageTransformsConfig, ImageTransformConfig
 
 # 方式一：使用默认变换配置（默认禁用）
 transforms_config = ImageTransformsConfig(
@@ -226,7 +244,7 @@ dataset = LeRobotDataset(
 )
 ```
 
-### 可用变换类型
+### 可用变换类型[[available-transform-types]]
 
 LeRobot 提供以下几种变换类型：
 
@@ -236,7 +254,7 @@ LeRobot 提供以下几种变换类型：
 
 也可以将任意 `torchvision.transforms.v2` 变换直接传入 `image_transforms` 参数。
 
-### 配置选项
+### 配置选项[[configuration-options]]
 
 - **`enable`**：启用/禁用变换（默认：`False`）
 - **`max_num_transforms`**：每帧最多应用的变换数量（默认：`3`）
@@ -244,7 +262,7 @@ LeRobot 提供以下几种变换类型：
 - **`weight`**：每种变换的采样概率（值越高概率越大；若权重之和不为 1，将自动归一化）
 - **`kwargs`**：变换专属参数（如亮度范围）
 
-### 可视化变换效果
+### 可视化变换效果[[visualizing-transforms]]
 
 使用可视化脚本预览变换对数据的影响：
 
@@ -257,7 +275,7 @@ lerobot-imgtransform-viz \
 
 该脚本保存展示每种变换效果的示例图像，帮助你调整参数。
 
-### 最佳实践
+### 最佳实践[[best-practices]]
 
 - **从保守值开始**：先使用较小范围（如亮度 0.9-1.1），再逐步增大
 - **先测试**：使用可视化脚本确认变换效果合理
@@ -265,7 +283,7 @@ lerobot-imgtransform-viz \
 - **匹配使用场景**：若机器人在变化的光照环境中工作，使用亮度/对比度变换
 - **合理组合**：同时使用过多变换可能导致训练不稳定
 
-## 将 `v2.1` 迁移到 `v3.0`
+## 将 `v2.1` 迁移到 `v3.0`[[migrate-v21-v30]]
 
 转换器将按片段存储的文件聚合为更大的分片，并写入片段偏移量/元数据。按以下说明转换你的数据集。
 
@@ -274,7 +292,7 @@ lerobot-imgtransform-viz \
 pip install "https://github.com/huggingface/lerobot/archive/33cad37054c2b594ceba57463e8f11ee374fa93c.zip"
 
 # 转换 Hub 上现有的 v2.1 数据集：
-python -m lerobot.datasets.v30.convert_dataset_v21_to_v30 --repo-id=<HF_USER/DATASET_ID>
+python -m lerobot.scripts.convert_dataset_v21_to_v30 --repo-id=<HF_USER/DATASET_ID>
 ```
 
 **转换内容**
@@ -283,14 +301,14 @@ python -m lerobot.datasets.v30.convert_dataset_v21_to_v30 --repo-id=<HF_USER/DAT
 - 聚合 mp4 文件：`episode-0000.mp4`、`episode-0001.mp4`、… → **`file-0000.mp4`**、…
 - 更新 `meta/episodes/*`（分块 Parquet），写入每个片段的长度、任务及字节/帧偏移量。
 
-## 常见问题
+## 常见问题[[common-issues]]
 
-### 推送前务必调用 `finalize()`
+### 推送前务必调用 `finalize()`[[always-call-finalize-before-pushing]]
 
 创建或录制数据集时，**必须**调用 `dataset.finalize()` 以正确关闭 parquet 写入器。详情见 [PR #1903](https://github.com/huggingface/lerobot/pull/1903)。
 
 ```python
-from lerobot.datasets.lerobot_dataset import LeRobotDataset
+from lerobot.datasets import LeRobotDataset
 
 # 创建数据集并录制片段
 dataset = LeRobotDataset.create(...)
@@ -315,3 +333,50 @@ Dataset v3.0 使用增量 parquet 写入和缓冲元数据以提升效率。`fin
 - 确保数据集可正常加载
 
 若不调用 `finalize()`，parquet 文件将不完整，数据集将无法正常加载。
+
+## 其他格式和实现[[other-formats-and-implementations]]
+
+### LanceDB 数据集后端[[lancedb-dataset-backend]]
+
+`v3` 数据集也可以存储为 [LanceDB](https://lancedb.com) 表。LanceDB 是一个基于 Lance 格式构建的多模态数据湖仓，面向 AI 访问模式：可对任意行及其视频字节进行快速随机访问，并在同一批表上提供标量、向量和全文索引，因此 EDA、挖掘、数据整理和训练都可以直接在对象存储上运行。该布局保持 `meta/` 不变，并新增一个 `frames` 表用于存放表格数据，以及一个 `videos` 表，以 blob 形式存放 MP4。`meta/info.json` 中的 `"storage_format": "lance"` 用于选择读取器；`LeRobotDataset` API、数据项和训练流程均保持不变。
+
+- **让 GPU 保持数据供给，直接从 Hub 或 HF Storage Bucket 进行训练。** 随机帧会就地读取，只读取每个批次需要的字节，因此每个批次都是全局打乱，且无需预先下载任何内容。
+- **以大致相当于一次文件复制的成本完成转换。** 视频不会重新编码，因此数据项与源数据逐位一致。DROID 的转换耗时 34 分钟。
+- **零拷贝特征工程。** 向训练器读取的表中添加分数、嵌入向量或修正标签等列，而无需重写视频或复制数据集，然后使用索引对它们进行过滤和搜索。读取器会忽略它不认识的列。
+
+有关其工作原理、基准测试和示例，请参阅 [LanceDB LeRobot 指南](https://docs.lancedb.com/training/lerobot)。
+
+摄像头特征必须基于视频。将摄像头帧存储为图像的数据集不受读取器支持，需要在转换前重新编码为视频。
+
+读取 Lance 数据集需要 `lancedb` 额外依赖（`pip install "lerobot[lancedb]"`）。该格式为只读：请使用默认格式录制和编辑数据集，然后使用 [`lerobot-lancedb`](https://pypi.org/project/lerobot-lancedb/) 包进行转换：
+
+```bash
+pip install "lerobot-lancedb"
+lerobot-lance-convert --repo-id lerobot/pusht --out ./pusht-lance  # 或 --root <local dataset dir>
+```
+
+加载时使用同一个类：
+
+```python
+from lerobot.datasets import LeRobotDataset
+
+# Hub 数据集仓库
+dataset = LeRobotDataset("lance-format/pusht-lance")
+
+# HF Storage Bucket，就地读取
+dataset = LeRobotDataset("my-org/pusht-lance", repo_type="bucket")
+
+# 将同一 bucket 作为 root URI（其他对象存储 URI 同理）
+dataset = LeRobotDataset("lerobot/pusht", root="hf://buckets/my-org/pusht-lance")
+```
+
+这些 HF Storage Bucket 选项在 `lerobot-train` 中同样可用：
+
+```bash
+lerobot-train \
+  --dataset.repo_id=my-org/pusht-lance \
+  --dataset.repo_type=bucket \
+  --policy.type=act
+```
+
+可视化支持两种查看器。`lerobot-dataset-viz --repo-id lance-format/pusht-lance --episode-index 0` 会像往常一样在 Rerun 中打开一个片段，而 `--display-mode foxglove` 会通过 WebSocket 将其提供给 [Foxglove](https://foxglove.dev)。无论哪种方式，都只会获取屏幕上显示的帧，无需导出或下载 MCAP。

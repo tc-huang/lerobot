@@ -1,0 +1,17 @@
+# 环境[[environments]]
+
+仿真环境（simulation environments）通过 [`EnvConfig`] 进行配置，并由 [`make_env`] 构建。每个子类声明其 `gym_kwargs` 以及如何构造向量化环境（vectorised environments）。
+
+有关使用已发布的环境（published environments），请参见 [Hub 中的环境](../envhub)；有关贡献新基准（benchmark），请参见 [添加新基准](../adding_benchmarks)。
+
+## EnvConfig[[envconfig]]
+
+[[autodoc]] lerobot.envs.EnvConfig
+
+## make_env[[makeenv]]
+
+[[autodoc]] lerobot.envs.make_env
+
+## make_env_config[[makeenvconfig]]
+
+[[autodoc]] lerobot.envs.make_env_config

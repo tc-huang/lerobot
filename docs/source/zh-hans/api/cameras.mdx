@@ -1,0 +1,17 @@
+# 摄像头[[cameras]]
+
+摄像头为策略（policy）提供其看到的图像观测（observation）。每个后端（backend）——OpenCV、Intel RealSense、Reachy 2——都实现了 [`Camera`] 接口（interface），因此更换硬件不会改变读取帧（frame）的代码。
+
+有关如何选择和配置摄像头，请参阅[摄像头指南](../cameras)；有关核心集（core set）之外的设备，请参阅[第三方摄像头与传感器](../third_party_sensors)。
+
+## Camera[[camera]]
+
+[[autodoc]] lerobot.cameras.Camera - connect - disconnect - read - async_read - find_cameras
+
+## CameraConfig[[cameraconfig]]
+
+[[autodoc]] lerobot.cameras.CameraConfig
+
+## make_cameras_from_configs[[makecamerasfromconfigs]]
+
+[[autodoc]] lerobot.cameras.make_cameras_from_configs

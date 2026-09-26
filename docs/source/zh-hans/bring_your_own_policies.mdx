@@ -1,0 +1,522 @@
+# 添加策略[[adding-a-policy]]
+
+本指南将引导你实现自定义策略（policy），并使其与 LeRobot 的训练、评估和部署工具协同工作。有两条路径：
+
+- **插件（out-of-tree）** — 将你的策略作为独立的 `lerobot_policy_*` 包发布。速度更快，无需 PR，易于迭代。适合实验、内部使用，或当你希望独立发布时。
+- **树内（in-tree，贡献给 LeRobot）** — 将策略直接放入 `src/lerobot/policies/`。需要 PR，但会让你的策略成为库中的一等公民。
+
+插件路线通常是正确的起点——一旦策略稳定下来，并且随库发布有明显价值，就将其提升为树内。
+
+无论选择哪条路径，构建模块都是相同的：配置类、策略类和处理器工厂。本指南前半部分介绍这些共享部分；后半部分介绍各路径特有的脚手架（[路径 A](#path-a-out-of-tree-plugin)、[路径 B](#path-b-contributing-in-tree)）。
+
+关于语气的一点说明：机器人学习是一个活跃发展的领域，“策略长什么样”会随着每个新架构而变化。这里描述的约定之所以存在，是因为它们让 `lerobot-train` 和 `lerobot-eval` 能够在差异很大的模型上统一工作。当新策略确实不适用这些约定时，可以提出（在 PR 或 issue 中）——这些约定并非神圣不可侵犯。
+
+---
+
+## 策略剖析[[anatomy-of-a-policy]]
+
+每个策略都由三个构建模块组成。下面的名称使用 `my_policy` 作为占位符——请替换为你的策略名称。该名称至关重要：它必须与传给 `@PreTrainedConfig.register_subclass` 的字符串、`MyPolicy.name` 类属性以及 `make_<name>_pre_post_processors` 工厂函数匹配（下文会逐一介绍）。
+
+### 配置类[[configuration-class]]
+
+继承 [`PreTrainedConfig`](https://github.com/huggingface/lerobot/blob/main/src/lerobot/configs/policies.py) 并注册你的策略类型。以下是一个模板——请根据你的策略架构和训练需求自定义参数和方法。
+
+```python
+# configuration_my_policy.py
+from dataclasses import dataclass, field
+from lerobot.configs import PreTrainedConfig
+from lerobot.optim import AdamWConfig
+from lerobot.optim import CosineDecayWithWarmupSchedulerConfig
+
+@PreTrainedConfig.register_subclass("my_policy")
+@dataclass
+class MyPolicyConfig(PreTrainedConfig):
+    """MyPolicy 的配置类。
+
+    Args:
+        n_obs_steps: 用作输入的观测步数
+        horizon: 动作预测时域
+        n_action_steps: 要执行的动作步数
+        hidden_dim: 策略网络的隐藏维度
+        # 在此添加策略特定参数
+    """
+
+    horizon: int = 50
+    n_action_steps: int = 50
+    hidden_dim: int = 256
+
+    optimizer_lr: float = 1e-4
+    optimizer_weight_decay: float = 1e-4
+
+    def __post_init__(self):
+        super().__post_init__()
+        if self.n_action_steps > self.horizon:
+            raise ValueError("n_action_steps cannot exceed horizon")
+
+    def validate_features(self) -> None:
+        """验证输入/输出特征兼容性。
+
+        请从策略的 __init__ 中显式调用——基类不会调用。
+        """
+        if not self.image_features:
+            raise ValueError("MyPolicy requires at least one image feature.")
+        if self.action_feature is None:
+            raise ValueError("MyPolicy requires 'action' in output_features.")
+
+    def get_optimizer_preset(self) -> AdamWConfig:
+        return AdamWConfig(lr=self.optimizer_lr, weight_decay=self.optimizer_weight_decay)
+
+    def get_scheduler_preset(self):
+        """从 lerobot.optim 返回 LRSchedulerConfig，或返回 None。"""
+        return None
+
+    @property
+    def observation_delta_indices(self) -> list[int] | None:
+        """数据集加载器为每个观测提供的相对时间步偏移量。
+
+        对于单帧策略，返回 `None`。对于使用时序的策略，如果它消费
+        多个过去或未来的帧，返回偏移量列表，例如 `[-20, -10, 0, 10]` 表示
+        步长为 10 的 3 个过去帧和步长为 10 的 1 个未来帧。
+        """
+        return None
+
+    @property
+    def action_delta_indices(self) -> list[int]:
+        """数据集加载器返回的动作块（chunk）的相对时间步偏移量。"""
+        return list(range(self.horizon))
+
+    @property
+    def reward_delta_indices(self) -> None:
+        return None
+```
+
+传给 `@register_subclass` 的字符串必须与 `MyPolicy.name`（下一节）匹配，并且是用户在 CLI 上作为 `--policy.type` 提供的值。对于 `get_optimizer_preset`，除非确实需要其他优化器，否则默认使用 `lerobot.optim` 中的 `AdamW`。
+
+### 策略类[[policy-class]]
+
+继承 [`PreTrainedPolicy`](https://github.com/huggingface/lerobot/blob/main/src/lerobot/policies/pretrained.py) 并设置两个类属性——二者都会由 `__init_subclass__` 检查：
+
+```python
+# modeling_my_policy.py
+import torch
+import torch.nn as nn
+from typing import Any
+
+from lerobot.policies import PreTrainedPolicy
+from lerobot.utils.constants import ACTION
+from .configuration_my_policy import MyPolicyConfig
+
+class MyPolicy(PreTrainedPolicy):
+    config_class = MyPolicyConfig  # 必须与 @register_subclass 中的字符串匹配
+    name = "my_policy"
+
+    def __init__(self, config: MyPolicyConfig, dataset_stats: dict[str, Any] = None):
+        super().__init__(config, dataset_stats)
+        config.validate_features()  # 基类不会自动调用
+        self.config = config
+        self.model = ...  # 在此放置你的 nn.Module
+
+    def reset(self):
+        """重置每个片段的状态。由 lerobot-eval 在每个片段开始时调用。"""
+        ...
+
+    def get_optim_params(self) -> dict:
+        """返回要传给优化器的参数（例如带有每组 lr/wd）。"""
+        return {"params": self.parameters()}
+
+    def predict_action_chunk(self, batch: dict[str, torch.Tensor], **kwargs) -> torch.Tensor:
+        """返回当前观测的完整动作块（B, chunk_size, action_dim）。"""
+        ...
+
+    def select_action(self, batch: dict[str, torch.Tensor], **kwargs) -> torch.Tensor:
+        """返回当前时间步的单个动作（推理时每一步都会调用）。"""
+        ...
+
+    def forward(self, batch: dict[str, torch.Tensor]) -> tuple[torch.Tensor, dict | None]:
+        """计算训练损失。
+
+        返回 `(loss, output_dict)`。`output_dict` 可以为 `None`；其中的所有内容必须是
+        便于日志记录的 Python 原生类型（不能包含带梯度的张量）。
+
+        `batch["action_is_pad"]` 是一个形状为 (B, horizon) 的布尔掩码，用于标记
+        因片段在 `horizon` 步之前结束而填充的时间步；你可以
+        将它们从损失中排除。
+        """
+        actions = batch[ACTION]
+        action_is_pad = batch.get("action_is_pad")
+        ...
+        return loss, {"some_loss_component": some_loss_component.item()}
+```
+
+训练/评估循环调用的方法：
+
+| 方法                                                              | 使用者          | 作用                                                                                                                                                                                                                   |
+| ----------------------------------------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reset() -> None`                                                 | `lerobot-eval`  | 在每个片段开始时清除每个片段的状态。                                                                                                                                                                                   |
+| `select_action(batch, **kwargs) -> Tensor`                        | `lerobot-eval`  | 返回下一个动作 `(B, action_dim)`。每一步都会调用。                                                                                                                                                                     |
+| `predict_action_chunk(batch, **kwargs) -> Tensor`                 | 策略自身        | 返回动作块 `(B, chunk_size, action_dim)`。目前在基类中是抽象方法——如果你的策略不进行分块，请抛出 `NotImplementedError`。                                                                                               |
+| `forward(batch, reduction="mean") -> tuple[Tensor, dict \| None]` | `lerobot-train` | 返回 `(loss, output_dict)`。如果你希望支持按样本加权，请接受 `reduction="none"`。                                                                                                                                      |
+| `get_optim_params() -> dict`                                      | 优化器          | 对于简单策略，返回 `self.parameters()`；对于多优化器策略，返回命名参数字典（参见 [`modeling_act.py`](https://github.com/huggingface/lerobot/blob/main/src/lerobot/policies/act/modeling_act.py) 中按组学习率的示例）。 |
+| `update() -> None` _(可选)_                                       | `lerobot-train` | 在每次优化器步骤后调用（如果定义了）。用于 EMA、目标网络、回放缓冲区（TDMPC 使用此方法）。                                                                                                                             |
+
+批次（batch）是扁平字典，以 [`lerobot.utils.constants`](https://github.com/huggingface/lerobot/blob/main/src/lerobot/utils/constants.py) 中的常量为键：`OBS_STATE`（`observation.state.<motor>`）、`OBS_IMAGES`（`observation.images.<camera>`）、`OBS_LANGUAGE`、`ACTION` 等。复用这些常量——不要发明新前缀。
+
+如果你的模型足够大，需要使用[分片多 GPU 训练](./multi_gpu_training#sharded-training-fsdp)，还要声明其 FSDP 包装单元——分片操作所针对的重复块类：
+
+```python
+class MyPolicy(PreTrainedPolicy):
+    ...
+    _fsdp_wrap_modules = ["MyTransformerBlock"]
+```
+
+通过这一处声明，`--parallelism.dp_shard=N` 即可开箱即用于你的策略（用户仍可用 `--accelerator.fsdp.wrap_modules` 覆盖）。如果没有任何包装来源，分片运行会在启动时按设计失败。
+
+### 处理器函数[[processor-functions]]
+
+LeRobot 使用 `PolicyProcessorPipeline` 在你的策略周围对输入进行归一化，并对输出进行反归一化。具体参考见 [`processor_act.py`](https://github.com/huggingface/lerobot/blob/main/src/lerobot/policies/act/processor_act.py) 或 [`processor_diffusion.py`](https://github.com/huggingface/lerobot/blob/main/src/lerobot/policies/diffusion/processor_diffusion.py)。
+
+这里要特别注意：处理器是最常见的可复现性痛点。归一化模式（`IDENTITY`、`MEAN_STD`、`MIN_MAX`、`QUANTILES`/`QUANTILE10`）不匹配，或者被归一化的特征不一致，虽然训练和评估不会报错，但会悄无声息地毁掉结果。确保模式与检查点训练时一致，所需的统计量存在（例如 `QUANTILES` 需要 `q01`/`q99`），并且预处理和后处理器保持一致。
+
+```python
+# processor_my_policy.py
+from typing import Any
+import torch
+
+from lerobot.processor import PolicyAction, PolicyProcessorPipeline
+
+
+def make_my_policy_pre_post_processors(
+    config,
+    dataset_stats: dict[str, dict[str, torch.Tensor]] | None = None,
+) -> tuple[
+    PolicyProcessorPipeline[dict[str, Any], dict[str, Any]],
+    PolicyProcessorPipeline[PolicyAction, PolicyAction],
+]:
+    preprocessor = ...   # 构建用于输入的 PolicyProcessorPipeline
+    postprocessor = ...  # 构建用于输出的 PolicyProcessorPipeline
+    return preprocessor, postprocessor
+```
+
+**重要——函数命名：** LeRobot 通过名称发现你的处理器。该函数**必须**命名为 `make_{policy_name}_pre_post_processors`（与传给 `@PreTrainedConfig.register_subclass` 的字符串匹配）。
+
+#### 可选：调整从检查点加载的处理器[[optional-adjusting-processors-loaded-from-a-checkpoint]]
+
+`make_{policy_name}_pre_post_processors` 仅在从头构建处理器时运行。只要涉及检查点（微调、恢复或评估），LeRobot 就会改为加载与权重一起序列化的流水线，并应用调用方的覆盖。
+
+如果你的策略必须调整这些已加载的流水线，请在同一模块中添加可选的第二个函数，命名为 `make_{policy_name}_pre_post_processors_from_pretrained`。LeRobot 会通过相同的命名约定找到它，并用它替代通用加载。不需要特殊处理的策略可以直接省略。
+
+```python
+from lerobot.processor import load_pretrained_policy_processors
+from lerobot.utils.constants import (
+    POLICY_POSTPROCESSOR_DEFAULT_NAME,
+    POLICY_PREPROCESSOR_DEFAULT_NAME,
+)
+
+
+def make_my_policy_pre_post_processors_from_pretrained(
+    config,
+    pretrained_path: str,
+    *,
+    revision: str | None = None,
+    dataset_stats: dict[str, dict[str, torch.Tensor]] | None = None,
+    dataset_meta: Any | None = None,
+    preprocessor_overrides: dict[str, Any] | None = None,
+    postprocessor_overrides: dict[str, Any] | None = None,
+    preprocessor_config_filename: str = f"{POLICY_PREPROCESSOR_DEFAULT_NAME}.json",
+    postprocessor_config_filename: str = f"{POLICY_POSTPROCESSOR_DEFAULT_NAME}.json",
+) -> tuple[
+    PolicyProcessorPipeline[dict[str, Any], dict[str, Any]],
+    PolicyProcessorPipeline[PolicyAction, PolicyAction],
+]:
+    preprocessor, postprocessor = load_pretrained_policy_processors(
+        pretrained_path,
+        revision=revision,
+        preprocessor_overrides=preprocessor_overrides,
+        postprocessor_overrides=postprocessor_overrides,
+        preprocessor_config_filename=preprocessor_config_filename,
+        postprocessor_config_filename=postprocessor_config_filename,
+    )
+    ...  # 将已加载的流水线与当前 `config` 协调一致
+    return preprocessor, postprocessor
+```
+
+可工作的示例见 [`processor_evo1.py`](https://github.com/huggingface/lerobot/blob/main/src/lerobot/policies/evo1/processor_evo1.py)（重新填充归一化统计量）、[`processor_groot.py`](https://github.com/huggingface/lerobot/blob/main/src/lerobot/policies/groot/processor_groot.py)（处理原始上游检查点）和 [`processor_molmoact2.py`](https://github.com/huggingface/lerobot/blob/main/src/lerobot/policies/molmoact2/processor_molmoact2.py)（重命名覆盖键）。
+
+### 支持文本的策略[[text-capable-policies]]
+
+语言策略在两个处理器步骤之间共享 recipe 渲染：
+
+- `RenderTrainingMessagesStep` 将数据集语言标注转换为渲染后的消息。
+- `RenderRuntimeMessagesStep` 将用户提示转换为渲染后的消息。
+
+然后，策略特定的处理器会应用聊天格式化和分词。
+
+策略配置存储解析后的 `recipe: TrainingRecipe | None`（来自
+`lerobot.datasets.recipe`）。可选的 `recipe_path` 可以加载 YAML recipe；
+在构建处理器之前解析它。解析后的 recipe 会启用 recipe
+训练，而 `None` 会使训练渲染器变为空操作。将解析后的
+recipe 序列化到配置和处理器中，这样部署就不依赖本地 YAML 路径。
+基于 recipe 的渲染需要 `dataset` extra，因为 recipe 目前
+位于 `lerobot.datasets` 下。
+
+将两个渲染器都放在策略原生聊天格式化和分词之前：
+
+```python
+input_steps = [
+    RenderRuntimeMessagesStep(config.recipe),
+    RenderTrainingMessagesStep(config.recipe),
+    # 观测变换
+    # 策略原生角色、图像放置、聊天模板和分词
+    # 设备放置
+]
+```
+
+同一流水线会为训练和推理保存和加载。运行时
+渲染仅针对显式的 `query_kind` 运行。训练渲染会跳过
+运行时查询，并且在配置了 recipe 时，处理带有原始
+标注或动作目标的样本。普通的仅观测输入会直接通过。带标注的纯文本训练
+无需动作张量即可支持。没有标注的训练需要动作
+目标才能启用任务回退。
+
+共享工厂仅构建或加载处理器。语言 recipe
+微调会根据活动配置和数据集统计量构建它们，因此
+保存的处理器无法覆盖新的 recipe。恢复和推理会加载已保存的
+流水线，包括其 recipe 和统计量。非语言训练保留
+其现有的构建和检查点加载行为。
+新工厂会自行推导归一化和相对动作设置。
+新工厂使用配置的设备；现有的数据集批次
+预处理会应用训练重命名映射。
+
+`messages_rendered` 包含 recipe 展开后的语义消息，位于原生
+聊天格式化或分词之前。训练 sidecar 会索引这同一个列表。
+消息辅助函数位于 `lerobot.utils.language`。
+
+交互式 rollout 会添加 `query_kind` 和 `query_text`。运行时渲染支持：
+
+- `vqa`：将调用方的问题保留为用户消息。
+- `next_subtask`：将检查点 recipe 渲染到监督 `${subtask}` 的
+  assistant 轮次为止，但不包括该轮次。
+
+然后策略通过现有的策略 API 暴露其解码器：
+
+```python
+class MyPolicy(PreTrainedPolicy):
+    def supports_text_generation(self) -> bool:
+        return True
+
+    def generate_text(self, batch) -> str:
+        token_ids = self.model.generate(**batch)
+        return self.tokenizer.decode(token_ids, skip_special_tokens=True)
+```
+
+`generate_text` 消费模型就绪的处理器输出；它不得重建或
+重新分词调用方的提示。在训练期间，策略原生分词器
+使用 `target_message_indices` 仅监督选定的 assistant 片段。
+将 recipe 存储在语言策略的配置中，以便它与
+检查点一起序列化，并且部署时重建训练所用的提示。
+
+---
+
+## 路径 A：树外插件[[path-a-out-of-tree-plugin]]
+
+发布策略最快的方式：将其打包为独立的 Python 发行版，并与 LeRobot 一起安装。无需 PR，你掌控发布周期，还可以在自己的命名空间下发布到 PyPI。
+
+### 包结构[[package-structure]]
+
+创建一个以 `lerobot_policy_` 为前缀（重要！）并后接策略名称的包：
+
+```bash
+lerobot_policy_my_policy/
+├── pyproject.toml
+└── src/
+    └── lerobot_policy_my_policy/
+        ├── __init__.py
+        ├── configuration_my_policy.py
+        ├── modeling_my_policy.py
+        └── processor_my_policy.py
+```
+
+### `pyproject.toml`[[pyprojecttoml]]
+
+```toml
+[project]
+name = "lerobot_policy_my_policy"
+version = "0.1.0"
+dependencies = [
+    # 你的策略特定依赖
+]
+requires-python = ">= 3.12"
+
+[build-system]
+build-backend = # 你的构建后端
+requires = # 你的构建系统
+```
+
+### 包 `__init__.py`[[package-initpy]]
+
+在包的 `__init__.py` 中暴露你的类，并防止 `lerobot` 缺失：
+
+```python
+# __init__.py
+"""LeRobot 的自定义策略包。"""
+
+try:
+    import lerobot  # noqa: F401
+except ImportError:
+    raise ImportError(
+        "lerobot is not installed. Please install lerobot to use this policy package."
+    )
+
+from .configuration_my_policy import MyPolicyConfig
+from .modeling_my_policy import MyPolicy
+from .processor_my_policy import make_my_policy_pre_post_processors
+
+__all__ = [
+    "MyPolicyConfig",
+    "MyPolicy",
+    "make_my_policy_pre_post_processors",
+]
+```
+
+### 安装和使用[[install-and-use]]
+
+```bash
+cd lerobot_policy_my_policy
+pip install -e .
+
+# 或者，如果已发布，从 PyPI 安装
+pip install lerobot_policy_my_policy
+```
+
+安装后，你的策略会自动与 LeRobot 的训练和评估工具集成：
+
+```bash
+lerobot-train \
+    --policy.type my_policy \
+    --env.type pusht \
+    --steps 200000
+```
+
+---
+
+## 路径 B：贡献到树内[[path-b-contributing-in-tree]]
+
+当你的策略稳定下来，并且随库发布有明显价值时，你可以直接将其并入 LeRobot。请先阅读通用[贡献指南](./contributing)和 [PR 模板](https://github.com/huggingface/lerobot/blob/main/.github/PULL_REQUEST_TEMPLATE.md)——你会在那里找到每个 PR 都必须满足的测试/质量要求（`pre-commit run -a`、`pytest`、社区审查规则等）。下面是在此基础上的策略特定层。
+
+### 树内布局[[in-tree-layout]]
+
+```
+src/lerobot/policies/my_policy/
+├── __init__.py                    # 重新导出配置 + 建模 + 处理器工厂
+├── configuration_my_policy.py     # MyPolicyConfig + @register_subclass
+├── modeling_my_policy.py          # MyPolicy(PreTrainedPolicy)
+├── processor_my_policy.py         # make_my_policy_pre_post_processors
+└── README.md                      # 符号链接 → ../../../../docs/source/policy_my_policy_README.md
+```
+
+两点说明：
+
+- 源代码旁边的 `README.md` 是一个指向 `docs/source/policy_<name>_README.md` 的**符号链接**——实际文件位于 `docs/` 下。现有策略（act、smolvla、diffusion 等）都这样做；复制其中一个符号链接即可。策略 README 通常很精简：论文链接 + BibTeX 引用。
+- 面向用户的教程——安装什么、如何训练、超参数、基准测试数值——单独位于 `docs/source/<my_policy>.mdx`，并在 `_toctree.yml` 中的 "Policies" 下注册。
+
+文件名至关重要：工厂按名称进行延迟导入，处理器则通过 `make_<policy_name>_pre_post_processors` 约定被发现。
+
+### 接入[[wiring]]
+
+有两个地方需要知道你的策略。全部按名称进行。
+
+1. **`policies/__init__.py`** — 重新导出 `MyPolicyConfig` 并将其加入 `__all__`。这个导入会注册你的策略：`@PreTrainedConfig.register_subclass("my_policy")` 会运行，从此工厂按约定解析一切。**不要**重新导出建模类；它会通过工厂延迟加载（这样 `import lerobot` 能保持快速）。
+2. **`templates/lerobot_modelcard_template.md` 和根目录 `README.md`** — 该模板是训练结束发布器渲染到每个用你的策略训练出的检查点模型卡片中的内容：在 `model_name` 分支中添加一行策略描述，在 `policy_docs` 中映射它，以便卡片链接到你的 MDX 指南，并可选择向 `diagrams` 添加架构图。然后，将你的策略添加到根目录 `README.md` 的模型表中，放在正确的类别下，并链接到你的文档页面。
+
+仿照一个与你的策略结构相似的现有策略；差异很小。
+
+### 重型/可选依赖[[heavy-optional-dependencies]]
+
+大多数策略都需要重型骨干网络（transformers、diffusers、特定的 VLM SDK）。只要存在可用的，就优先从 `transformers` 或 `diffusers` 等加载，而不是在树内重新实现架构。
+
+约定是**两步门控**：模块顶部使用 `TYPE_CHECKING` 保护的导入，以及构造函数中的 `require_package` 运行时检查。[`modeling_diffusion.py`](https://github.com/huggingface/lerobot/blob/main/src/lerobot/policies/diffusion/modeling_diffusion.py) 是标准参考：
+
+```python
+from typing import TYPE_CHECKING
+from lerobot.utils.import_utils import _diffusers_available, require_package
+
+if TYPE_CHECKING or _diffusers_available:
+    from diffusers.schedulers.scheduling_ddim import DDIMScheduler
+else:
+    DDIMScheduler = None  # 使符号在导入时仍可绑定
+
+class DiffusionPolicy(PreTrainedPolicy):
+    def __init__(self, config):
+        require_package("diffusers", extra="diffusion")
+        super().__init__(config)
+        ...
+```
+
+这样：
+
+- 即使未安装 extra，`import lerobot.policies` 仍可工作（符号只是绑定为 `None`）。
+- 类型检查器能看到真实符号。
+- 未安装 extra 时实例化策略会抛出清晰的 `ImportError`，指向 `pip install 'lerobot[diffusion]'`。
+
+在 [`pyproject.toml`](https://github.com/huggingface/lerobot/blob/main/pyproject.toml) 的 `[project.optional-dependencies]` 中添加匹配的 extra，并将其包含在 `all` extra 中，以便 `pip install 'lerobot[all]'` 继续安装所有内容。
+
+### 避免复制建模文件——子类化它[[avoid-copying-a-modeling-file-subclass-it]]
+
+如果你的策略需要修改 `transformers` 中已存在的骨干网络（自定义条件、额外输入、替换子模块），**不要复制其 `modeling_*.py`**。相反，应子类化最小的上游单元，并只覆盖发生变化的部分。[`pi_gemma.py`](https://github.com/huggingface/lerobot/blob/main/src/lerobot/policies/pi_gemma.py) 是标准参考：它通过子类化 `GemmaModel`/`PaliGemmaModel` 并覆盖解码器层 forward，在约 370 行内向 PaliGemma/Gemma 注入 AdaRMS 条件，而不是 fork 约 2,000 行的建模文件。对*已加载*的原生模型进行模型手术也可以（层截断、分词器扩展、隐藏状态捕获——工作示例见 `evo1/internvl3_embedder.py`、`eo1/modeling_eo1.py`、`groot/groot_n1_7.py`）。当 PR 带有复制的建模文件时，审查者会要求采用这种模式；唯一接受的例外是 `transformers` 中完全不存在的模型。
+
+### 基准测试和已发布检查点[[benchmarks-and-a-published-checkpoint]]
+
+新策略如果附带一个可工作的检查点和至少一个可复现的数值，会更容易审查——也有用得多。
+
+**至少选择一个树内基准测试。** LeRobot 提供带有每个基准测试 Docker 镜像的仿真基准测试（LIBERO、LIBERO-plus、Meta-World、RoboTwin 2.0、RoboCasa365、RoboCerebra、RoboMME、VLABench 等）。选择与你的策略模态匹配的那个——VLA 通常选择 LIBERO 或 VLABench；纯图像 BC 选择 LIBERO 或 Meta-World。完整列表位于文档侧边栏的[基准测试](./libero)下。
+
+**将检查点和处理器推送到 Hub**，路径为 `lerobot/<policy>_<benchmark>`（如果没有写入权限，则放到你的命名空间；维护者可以镜像它）。最简单的方式是使用 `--policy.repo_id=<namespace>/<repo>` 和 `--policy.push_to_hub=true` 进行训练：`lerobot-train` 会在运行结束时发布模型、两个处理器和模型卡片。如果要在事后发布现有检查点，请上传其 `pretrained_model/` 目录（例如 `huggingface-cli upload`），或者对分片格式检查点使用 `lerobot-convert-dcp --push_to_hub=...`。
+
+**在策略的 MDX 中报告结果**，并附上确切的 `lerobot-eval` 命令和硬件，以便任何人都能重新运行：
+
+```markdown
+## Results
+
+Evaluated on LIBERO with `lerobot/<policy>_libero`:
+
+| Suite          | Success rate | n_episodes |
+| -------------- | -----------: | ---------: |
+| libero_spatial |        87.5% |         50 |
+| libero_object  |        93.0% |         50 |
+| libero_goal    |        81.5% |         50 |
+| libero_10      |        62.0% |         50 |
+| **average**    |    **81.0%** |        200 |
+
+Reproduce: `lerobot-eval --policy.path=lerobot/<policy>_libero --env.type=libero --env.task=libero_spatial --eval.n_episodes=50` (1× A100 40 GB).
+```
+
+每个套件使用 `n_episodes ≥ 50` 以获得稳定的成功率估计。
+
+如果你的策略仅适用于真机，并且没有适用的仿真基准测试，请将仿真评估替换为：Hub 上的公共训练数据集、`lerobot-train` 命令、检查点，以及通过 `lerobot-rollout --policy.path=...` 在 ≥10 个片段上得到的真机成功率。
+
+### PR 检查清单[[pr-checklist]]
+
+通用期望见 [`CONTRIBUTING.md`](https://github.com/huggingface/lerobot/blob/main/CONTRIBUTING.md) 和 [PR 模板](https://github.com/huggingface/lerobot/blob/main/.github/PULL_REQUEST_TEMPLATE.md)。除此之外，审查者还会关注：
+
+- [ ] `MyPolicy` 和 `MyPolicyConfig` 覆盖上述接口；`__init_subclass__` 接受该类。
+- [ ] `policies/__init__.py` 重新导出配置（这会注册策略；工厂按命名约定解析建模/处理器）。
+- [ ] `make_my_policy_pre_post_processors` 遵循命名约定。
+- [ ] 可选依赖位于 `[project.optional-dependencies]` extra 和 `TYPE_CHECKING + require_package` 保护之后。
+- [ ] 更新 `tests/policies/`；提交向后兼容产物和策略特定测试。
+- [ ] `src/lerobot/policies/<name>/README.md` 符号链接到 `docs/source/policy_<name>_README.md`；编写面向用户的 `docs/source/<name>.mdx` 并添加到 `_toctree.yml`。
+- [ ] `lerobot-train --policy.type my_policy ...` 端到端运行至少几步 + 保存一个可由 `lerobot-eval` 或 `lerobot-rollout` 加载并运行的检查点。
+- [ ] `templates/lerobot_modelcard_template.md` 中有你的策略的描述条目和 `policy_docs` 链接。
+- [ ] 根目录 `README.md` 中的模型表在正确类别下列出你的策略，并链接到你的文档页面。
+- [ ] 策略 MDX 中至少有一个可复现的基准测试评估，并带有已发布检查点（仿真基准测试，或真机数据集 + 检查点）。
+
+获得干净 PR 最快的方式是复制与你最接近的现有策略目录，重命名，并逐个方法替换内容。不要等到一切完美——尽早打开草稿 PR 并与我们一起迭代；审查者更愿意在半完成的 PR 分支上提供反馈，而不是在一个已经完全合并的分支上。
+
+---
+
+## 示例和社区贡献[[examples-and-community-contributions]]
+
+看看这些示例策略实现：
+
+- [DiTFlow Policy](https://github.com/danielsanjosepro/lerobot_policy_ditflow) — 具有流匹配目标的 Diffusion Transformer 策略。在此示例中试用：[DiTFlow Example](https://github.com/danielsanjosepro/test_lerobot_policy_ditflow)
+
+感谢你抽出时间将新策略引入 LeRobot。每个进入 `main` 的架构——以及社区发布的每个插件——都会让这个库对下一个人更有用一点，也更能代表机器人学习的未来方向。我们期待看到你发布的内容。🤗
