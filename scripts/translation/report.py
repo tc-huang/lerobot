@@ -69,6 +69,7 @@ class SiteUrls:
 class DocView:
     name: str  # the page, a source file name without its suffix
     emoji: str  # what happened to the page, or 💥 when it raised
+    title_only: bool  # the English sidebar title changed without a content change
     preview: str  # link to the page in this run's deployment, "—" once the page is removed
     preview_html: str  # the same link as an anchor, for the <summary> line that keeps markdown literal
     current: str  # link to the page as the last run published it, "—" for a page never translated
@@ -109,8 +110,14 @@ def _doc_view(doc: dict, urls: SiteUrls, lang_name: str, inlined: bool) -> DocVi
     action, removed = doc["action"], doc["action"] == "removed"
     source_diff = doc["source_diff"]
     stat = doc["diff_stat"]
-    change_plain = f"+{stat[0]} −{stat[1]}" if stat else "—"
-    change = f"`{change_plain}`" if stat else "—"
+    title_only = doc.get("title_only", False)
+    if title_only:
+        change_plain = "title only"
+    elif stat:
+        change_plain = f"+{stat[0]} −{stat[1]}"
+    else:
+        change_plain = "—"
+    change = f"`{change_plain}`" if stat or title_only else "—"
     commits = doc["commits_since"]
     preview_url = None if removed else f"{urls.preview}/{name}"
     english_url = None if removed else f"{urls.english}/{name}"
@@ -119,6 +126,7 @@ def _doc_view(doc: dict, urls: SiteUrls, lang_name: str, inlined: bool) -> DocVi
     return DocView(
         name=name,
         emoji=ERROR_EMOJI if doc["error"] else ACTION_EMOJI[action],
+        title_only=title_only,
         preview=_link(lang_name, preview_url),
         preview_html=_html_link(lang_name, preview_url),
         current=_link(lang_name, current_url),
@@ -128,7 +136,7 @@ def _doc_view(doc: dict, urls: SiteUrls, lang_name: str, inlined: bool) -> DocVi
         english_html=_html_link("English", english_url),
         translated_from=_commit(doc["translated_from"], urls.repo),
         english_now=_commit(doc["english_now"], urls.repo, "removed in " if removed else ""),
-        changed=bool(stat),
+        changed=bool(stat) or title_only,
         change=change,
         change_plain=change_plain,
         behind=f"{plural(commits, 'commit')}, {change}" if commits else change,
@@ -141,7 +149,7 @@ def _doc_view(doc: dict, urls: SiteUrls, lang_name: str, inlined: bool) -> DocVi
             if source_diff and doc["translated_from"] and doc["english_now"]
             else None
         ),
-        note="" if inlined else ", diff not inlined",
+        note="" if inlined or not source_diff else ", diff not inlined",
     )
 
 

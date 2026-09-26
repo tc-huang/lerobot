@@ -100,6 +100,10 @@ class GitRepo:
         result = self._run("rev-parse", f"{commit}:{self._relative(path)}", check=False)
         return result.stdout.strip() if result.returncode == 0 else None
 
+    def file_at(self, commit: str, path: Path) -> str | None:
+        result = self._run("show", f"{commit}:{self._relative(path)}", check=False)
+        return result.stdout if result.returncode == 0 else None
+
     def diff_blobs(self, old_blob: str, new_blob: str) -> str:
         return self._run("diff", old_blob, new_blob).stdout
 
@@ -198,6 +202,12 @@ class SourceDocs(Docs):
         super().__init__(doc_en_dir)
         self._git = git
 
+    def get_doc_title(self, doc_file_name: str) -> str:
+        titles = self.get_section_and_doc_title(doc_file_name)
+        if titles is None:
+            raise ValueError(f"{doc_file_name} is not listed in {TOCTREE_FILE_NAME}")
+        return titles[1]
+
     def _matching_source_commit(
         self, target_path: Path, source_path: Path, exclude: Path | None = None
     ) -> Commit | None:
@@ -230,6 +240,20 @@ class SourceDocs(Docs):
         if commit is None:
             return None
         return self._git.blob_at(commit.commit, self._doc_dir / doc_file_name)
+
+    def get_translated_title(self, doc_lang_dir: Path, doc_file_name: str) -> str | None:
+        commit = self._git.last_touching_commit(doc_lang_dir / doc_file_name)
+        if commit is None:
+            return None
+        toctree = self._git.file_at(commit.commit, self._doc_dir / TOCTREE_FILE_NAME)
+        if toctree is None:
+            return None
+        local = Path(doc_file_name).with_suffix("").as_posix()
+        for section in yaml.safe_load(toctree) or []:
+            for entry in section["sections"]:
+                if entry["local"] == local:
+                    return entry["title"]
+        return None
 
     def get_translated_commit(self, doc_lang_dir: Path, doc_file_name: str) -> Commit | None:
         return self._matching_source_commit(doc_lang_dir / doc_file_name, self._doc_dir / doc_file_name)
@@ -273,6 +297,10 @@ class TranslationRecord:
     def get_last_translated_version(self, doc_file_name: str) -> str | None:
         return self._docs.get(doc_file_name, {}).get("source_version")
 
+    def get_last_source_title(self, doc_file_name: str) -> str | None:
+        recorded = self._docs.get(doc_file_name, {}).get("source_title")
+        return recorded or self._source_docs.get_translated_title(self._doc_lang_dir, doc_file_name)
+
     def get_doc_title(self, doc_file_name: str) -> str | None:
         return self._docs.get(doc_file_name, {}).get("title")
 
@@ -285,11 +313,15 @@ class TranslationRecord:
     def add(self, doc_file_name: str, doc_title: str) -> None:
         self._docs[doc_file_name] = {
             "source_version": self._source_docs.get_current_version(doc_file_name),
+            "source_title": self._source_docs.get_doc_title(doc_file_name),
             "title": doc_title,
         }
 
-    def update(self, doc_file_name: str) -> None:
+    def update(self, doc_file_name: str, doc_title: str | None = None) -> None:
         self._docs[doc_file_name]["source_version"] = self._source_docs.get_current_version(doc_file_name)
+        self._docs[doc_file_name]["source_title"] = self._source_docs.get_doc_title(doc_file_name)
+        if doc_title is not None:
+            self._docs[doc_file_name]["title"] = doc_title
 
     def remove(self, doc_file_name: str) -> None:
         self._docs.pop(doc_file_name, None)
@@ -338,7 +370,12 @@ class TargetDocs(Docs):
     def _need_update(self, doc_file_name: str) -> bool:
         return self._record.get_last_translated_version(
             doc_file_name
-        ) != self._source_docs.get_current_version(doc_file_name)
+        ) != self._source_docs.get_current_version(doc_file_name) or self.source_title_changed(doc_file_name)
+
+    def source_title_changed(self, doc_file_name: str) -> bool:
+        previous = self._record.get_last_source_title(doc_file_name)
+        current = self._source_docs.get_section_and_doc_title(doc_file_name)
+        return previous is not None and current is not None and previous != current[1]
 
     def get_last_translated_version(self, doc_file_name: str) -> str | None:
         return self._record.get_last_translated_version(doc_file_name)
@@ -368,8 +405,8 @@ class TargetDocs(Docs):
         self._remove(doc_file_name)
         self._save()
 
-    def update_doc(self, doc_file_name: str, doc_content: str) -> None:
-        self._record.update(doc_file_name)
+    def update_doc(self, doc_file_name: str, doc_content: str, doc_title: str | None = None) -> None:
+        self._record.update(doc_file_name, doc_title)
         self._write(doc_file_name, doc_content)
         self._save()
 
@@ -548,6 +585,7 @@ class DocAction(StrEnum):
 class DocOutcome:
     file_name: str
     action: DocAction
+    title_only: bool = False
     attempts: int = 0
     error: str | None = None
     check_failures: list[str] = field(default_factory=list)
@@ -680,18 +718,26 @@ class TranslationPipeline:
         old_version = self._target_docs.get_last_translated_version(file_name)
         source_doc_diff = None if old_version is None else self._source_docs.get_diff(file_name, old_version)
         translated_from = self._target_docs.get_translated_commit(file_name)
+        translated_doc_title = None
+        if self._target_docs.source_title_changed(file_name):
+            translated_doc_title = self._translator.translate_title(
+                self._source_docs.get_doc_title(file_name)
+            )
 
         check_failures: list[str] = []
         for attempt in range(1, self._max_attempts + 1):
-            if source_doc_diff is None:
+            if source_doc_diff == "":
+                updated_content = doc_lang_content_old
+            elif source_doc_diff is None:
                 updated_content = self._translator.translate_from_scratch(source_doc_content)
             else:
                 updated_content = self._translator.update_translation(
                     source_doc_content, source_doc_diff, doc_lang_content_old
                 )
-            check_failures = self._translation_checker.check_all(source_doc_content, updated_content)
+            if source_doc_diff != "":
+                check_failures = self._translation_checker.check_all(source_doc_content, updated_content)
             if not check_failures:
-                self._target_docs.update_doc(file_name, updated_content)
+                self._target_docs.update_doc(file_name, updated_content, translated_doc_title)
                 action, attempts = DocAction.UPDATED, attempt
                 break
         else:
@@ -701,6 +747,7 @@ class TranslationPipeline:
         return DocOutcome(
             file_name,
             action,
+            title_only=source_doc_diff == "",
             attempts=attempts,
             check_failures=check_failures,
             diff_stat=diff_stat,
