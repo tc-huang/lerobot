@@ -117,6 +117,11 @@
       "source_version": "8012d62bc6e723c7e275ba5d4c944437eef63234",
       "title": "更新 Feetech 韌體"
     },
+    "flux3.mdx": {
+      "source_title": "FLUX 3 Action (flux3)",
+      "source_version": "13faddbab8614b52d816c7d78e43048a4b1a65b2",
+      "title": "FLUX 3 Action（flux3）"
+    },
     "groot.mdx": {
       "source_version": "12d67f62db09f2b70b70a267f17e613ec55e6190",
       "title": "NVIDIA GR00T"
@@ -154,7 +159,8 @@
       "title": "LeRobot"
     },
     "inference.mdx": {
-      "source_version": "63009bf0980543c00cf7b989cfe4467c69ee7020",
+      "source_title": "Policy Deployment (lerobot-rollout)",
+      "source_version": "2b2268774aedef4bcd8f1b295efd5cc066a9bc96",
       "title": "策略部署（Policy Deployment, lerobot-rollout）"
     },
     "installation.mdx": {
