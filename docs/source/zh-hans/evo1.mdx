@@ -1,0 +1,398 @@
+# EVO1[[evo1]]
+
+EVO1 是一种用于机器人控制的视觉-语言-动作（Vision-Language-Action）策略，以 InternVL3 骨干网络和连续的流匹配（flow matching）动作头为核心构建。此 LeRobot 集成将 EVO1 作为标准策略类型提供，因此可以使用常规的 LeRobot 数据集、检查点和处理器 API 对其进行训练和评估。
+
+## 模型概述[[model-overview]]
+
+该策略使用 InternVL3 对一张或多张摄像头图像以及语言任务提示词进行嵌入，将机器人状态 / 动作向量填充到固定的最大维度，并使用流匹配动作头预测未来的动作块（action chunk）。推理时，策略会采样一个动作块，并在再次采样前返回该动作块中的 `n_action_steps` 个动作。
+
+### LeRobot 集成涵盖的内容[[what-the-lerobot-integration-covers]]
+
+- 通过 LeRobot 使用标准的 `policy.type=evo1` 配置
+- InternVL3 图像 / 文本嵌入，并可在 FlashAttention 不可用时回退
+- 基于阶段的微调控制，支持仅训练动作头以及微调 VLM 的运行
+- 连续的流匹配动作预测
+- 通过 LeRobot 策略 API 保存和加载检查点
+- 使用 `lerobot-train` 训练，并使用标准的策略推理 API 评估
+
+更完整的 EVO1 项目可能还包括额外的训练脚本和数据集工具。本页重点介绍 LeRobot 中的机器人控制策略路径。
+
+## 安装要求[[installation-requirements]]
+
+1. 按照[安装指南](./installation)安装 LeRobot。
+2. 安装 EVO1 依赖：
+
+   ```bash
+   pip install -e ".[training,evo1]"
+   ```
+
+   如需在 LIBERO 上训练和评估，还需安装 LIBERO extra：
+
+   ```bash
+   pip install -e ".[training,evo1,libero]"
+   ```
+
+3. 只有当 `flash-attn` wheel 与你的 Python、PyTorch、CUDA 和 GPU 环境兼容时才安装它。`flash_attn` 不可用时，EVO1 会回退到标准注意力。
+
+EVO1 使用 Hugging Face `transformers` 原生的 InternVL 实现，因此 `policy.vlm_model_name` 必须指向原生转换的检查点，例如 `OpenGVLab/InternVL3-1B-hf`（注意 `-hf` 后缀）。首次运行时会下载所配置的 VLM 检查点，之后的运行会复用 Hugging Face 缓存中的版本。
+
+## 数据要求[[data-requirements]]
+
+EVO1 需要的 LeRobot 数据集应包含：
+
+- 1 到 `policy.max_views` 个视觉观测，例如 `observation.images.image`
+- `observation.state`
+- `action`
+- 数据集 `task` 字段中的语言任务指令，或通过 `policy.task_field` 配置的其他字段
+
+状态和动作向量会被填充到 `policy.max_state_dim` 和 `policy.max_action_dim`。预测结果在返回之前会被裁剪回数据集的动作维度。
+
+## 用法[[usage]]
+
+要在 LeRobot 配置中使用 EVO1，请指定：
+
+```python
+policy.type=evo1
+```
+
+默认情况下，新的 EVO1 策略会从以下位置初始化其 VLM：
+
+```python
+policy.vlm_model_name=OpenGVLab/InternVL3-1B-hf
+```
+
+有了 LeRobot 格式的 EVO1 检查点后，使用以下方式加载：
+
+```python
+policy.path=your-org/your-evo1-checkpoint
+```
+
+## 训练[[training]]
+
+### 阶段 1[[stage-1]]
+
+阶段 1 冻结 VLM，只训练动作头：
+
+```bash
+lerobot-train \
+  --dataset.repo_id=your_org/your_dataset \
+  --policy.type=evo1 \
+  --policy.training_stage=stage1 \
+  --policy.vlm_model_name=OpenGVLab/InternVL3-1B-hf \
+  --policy.device=cuda \
+  --policy.chunk_size=50 \
+  --policy.n_action_steps=50 \
+  --policy.max_state_dim=24 \
+  --policy.max_action_dim=24 \
+  --policy.optimizer_lr=1e-5 \
+  --batch_size=4 \
+  --steps=5000 \
+  --output_dir=./outputs/evo1_stage1
+```
+
+### 阶段 2[[stage-2]]
+
+阶段 2 加载阶段 1 的策略，但会使用全新的优化器和学习率调度器：
+
+```bash
+lerobot-train \
+  --dataset.repo_id=your_org/your_dataset \
+  --policy.path=./outputs/evo1_stage1/checkpoints/005000/pretrained_model \
+  --policy.training_stage=stage2 \
+  --policy.vlm_model_name=OpenGVLab/InternVL3-1B-hf \
+  --policy.device=cuda \
+  --policy.chunk_size=50 \
+  --policy.n_action_steps=50 \
+  --policy.max_state_dim=24 \
+  --policy.max_action_dim=24 \
+  --policy.optimizer_lr=1e-5 \
+  --batch_size=4 \
+  --steps=80000 \
+  --output_dir=./outputs/evo1_stage2
+```
+
+默认情况下，`policy.training_stage` 会重新应用该阶段的微调默认值。当从阶段 1 检查点
+开始阶段 2 时，这一点很重要，因为阶段 1 检查点的配置中把 VLM 微调
+标志存储为禁用状态。除非设置了 `policy.apply_training_stage_defaults=false`，否则这些阶段默认值会优先于已保存或手动提供的 `policy.finetune_*`
+标志，因此只有在手动控制
+每一个微调标志时才设置该参数。
+
+### 关键训练参数[[key-training-parameters]]
+
+| 参数                                          | 默认值                      | 说明                                           |
+| --------------------------------------------- | --------------------------- | ---------------------------------------------- |
+| `policy.vlm_model_name`                       | `OpenGVLab/InternVL3-1B-hf` | 原生转换的 InternVL3 检查点或本地模型目录      |
+| `policy.training_stage`                       | `stage1`                    | `stage1` 训练动作头；`stage2` 微调 VLM 分支    |
+| `policy.apply_training_stage_defaults`        | `true`                      | 加载检查点后重新应用该阶段的微调默认值         |
+| `policy.vlm_num_layers`                       | `14`                        | 策略保留的 InternVL3 语言层数                  |
+| `policy.vlm_dtype`                            | `bfloat16`                  | 请求的 VLM dtype                               |
+| `policy.use_flash_attn`                       | `true`                      | 已安装时使用 FlashAttention，否则回退          |
+| `policy.enable_gradient_checkpointing`        | `true`                      | 在支持的 InternVL3 模块上启用梯度检查点        |
+| `policy.gradient_checkpointing_use_reentrant` | `false`                     | 在支持时传给梯度检查点的 reentrant 设置        |
+| `policy.chunk_size`                           | `50`                        | 每个动作块预测的未来动作数                     |
+| `policy.n_action_steps`                       | `50`                        | 从采样的动作块中实际执行的动作数               |
+| `policy.max_state_dim`                        | `24`                        | 状态填充维度                                   |
+| `policy.max_action_dim`                       | `24`                        | 动作填充维度                                   |
+| `policy.postprocess_action_dim`               | `null`                      | EVO1 后处理后返回的动作维度（可选）            |
+| `policy.binarize_gripper`                     | `false`                     | 为 LIBERO 风格的评估将后处理后的夹爪通道二值化 |
+| `policy.task_field`                           | `task`                      | 用作语言提示词的批次字段                       |
+
+## 推理[[inference]]
+
+使用训练好的 EVO1 检查点试一试：
+
+```bash
+lerobot-rollout \
+  --policy.path=your-org/your-evo1-checkpoint \
+  --inference.type=rtc \ # 可选
+  ...
+```
+
+## 结果[[results]]
+
+### LIBERO 评估[[libero-evaluation]]
+
+#### 参考结果[[reference-result]]
+
+> [!NOTE]
+> 已发布的阶段 2 检查点通过了全新下载和 rollout 验证：
+> [`zuoxingdong/evo1_libero`](https://huggingface.co/zuoxingdong/evo1_libero)，修订版本
+> [`515921f4a2c1d3f3ad523721eafa26fdf2af315b`](https://huggingface.co/zuoxingdong/evo1_libero/commit/515921f4a2c1d3f3ad523721eafa26fdf2af315b)。
+> 全新下载评估使用的 LeRobot 修订版本为
+> [`e40b58a8dfa9e7b86918c374791599d070518d11`](https://github.com/huggingface/lerobot/commit/e40b58a8dfa9e7b86918c374791599d070518d11)。
+
+阶段 2 单次训练在第 70,000 步的检查点得到以下结果：
+
+| 套件           | 成功片段数 |    片段数 |     成功率 |
+| -------------- | ---------: | --------: | ---------: |
+| LIBERO Spatial |        485 |       500 |      97.0% |
+| LIBERO Object  |        496 |       500 |      99.2% |
+| LIBERO Goal    |        483 |       500 |      96.6% |
+| LIBERO-10      |        469 |       500 |      93.8% |
+| **总计**       |  **1,933** | **2,000** | **96.65%** |
+
+这些结果使用单个训练好的检查点和评估种子 `1000`；它们不是多种子
+平均值，也不是置信度估计。
+
+#### 参考训练配方[[reference-training-recipe]]
+
+已发布的检查点在以下文件中记录了完整解析后的阶段 2 配置：
+[`train_config.json`](https://huggingface.co/zuoxingdong/evo1_libero/blob/515921f4a2c1d3f3ad523721eafa26fdf2af315b/train_config.json)。
+实测运行使用两块 H100 GPU，采用两个 DDP 进程，每个进程批大小为 64，全局批大小为 128。两个阶段使用相同的拓扑。基础 VLM 来自
+`OpenGVLab/InternVL3-1B-hf` 的修订版本 `014c0583a0d4bedf29fbe2dbff4f865eb998e171`。
+已发布的产物没有记录确切的 LeRobot 训练提交及其原始依赖锁定文件，
+因此下面的命令是基于当前代码检出复现所记录的配置和拓扑，而不是
+逐位重建软件环境。
+
+在 LeRobot 源码检出目录中，安装锁定的依赖并下载该确切的 VLM 修订版本：
+
+```bash
+uv sync --locked --extra training --extra evo1 --extra libero
+VLM_DIR=$(uv run hf download OpenGVLab/InternVL3-1B-hf \
+  --revision=014c0583a0d4bedf29fbe2dbff4f865eb998e171)
+```
+
+阶段 1 冻结 VLM，并训练动作头 5,000 步：
+
+```bash
+uv run accelerate launch --num_processes=2 -m lerobot.scripts.lerobot_train \
+  --dataset.repo_id=lerobot/libero \
+  --dataset.revision=a1aaacb7f6cd6ee5fb43120f673cebb0cfea7dd4 \
+  --dataset.video_backend=torchcodec \
+  --dataset.return_uint8=true \
+  --dataset.image_transforms.enable=true \
+  --dataset.use_imagenet_stats=true \
+  --dataset.eval_split=0.0 \
+  --policy.type=evo1 \
+  --policy.training_stage=stage1 \
+  --policy.apply_training_stage_defaults=true \
+  --policy.vlm_model_name="${VLM_DIR}" \
+  --policy.vlm_num_layers=14 \
+  --policy.vlm_dtype=bfloat16 \
+  --policy.device=cuda \
+  --policy.use_amp=true \
+  --policy.use_flash_attn=true \
+  --policy.enable_gradient_checkpointing=true \
+  --policy.gradient_checkpointing_use_reentrant=false \
+  --policy.image_resolution='[448,448]' \
+  --policy.chunk_size=50 \
+  --policy.n_action_steps=50 \
+  --policy.max_state_dim=24 \
+  --policy.max_action_dim=24 \
+  --policy.dropout=0.2 \
+  --policy.optimizer_lr=1e-5 \
+  --policy.optimizer_weight_decay=1e-3 \
+  --policy.optimizer_grad_clip_norm=1.0 \
+  --policy.scheduler_warmup_steps=1000 \
+  --policy.push_to_hub=false \
+  --use_policy_training_preset=true \
+  --batch_size=64 \
+  --steps=5000 \
+  --save_checkpoint=true \
+  --save_checkpoint_to_hub=false \
+  --save_freq=2500 \
+  --log_freq=10 \
+  --env_eval_freq=0 \
+  --num_workers=4 \
+  --prefetch_factor=2 \
+  --persistent_workers=true \
+  --seed=1000 \
+  --wandb.enable=false \
+  --output_dir=./outputs/evo1-libero-stage1-g128-5k
+```
+
+阶段 2 加载阶段 1 的策略，但会使用全新的优化器和学习率调度器。它训练 80,000 步；
+报告的检查点是第 70,000 步保存的版本：
+
+```bash
+uv run accelerate launch --num_processes=2 -m lerobot.scripts.lerobot_train \
+  --dataset.repo_id=lerobot/libero \
+  --dataset.revision=a1aaacb7f6cd6ee5fb43120f673cebb0cfea7dd4 \
+  --dataset.video_backend=torchcodec \
+  --dataset.return_uint8=true \
+  --dataset.image_transforms.enable=true \
+  --dataset.use_imagenet_stats=true \
+  --dataset.eval_split=0.0 \
+  --policy.path=./outputs/evo1-libero-stage1-g128-5k/checkpoints/005000/pretrained_model \
+  --policy.training_stage=stage2 \
+  --policy.apply_training_stage_defaults=true \
+  --policy.vlm_model_name="${VLM_DIR}" \
+  --policy.vlm_num_layers=14 \
+  --policy.vlm_dtype=float32 \
+  --policy.device=cuda \
+  --policy.use_amp=true \
+  --policy.use_flash_attn=true \
+  --policy.enable_gradient_checkpointing=true \
+  --policy.gradient_checkpointing_use_reentrant=false \
+  --policy.image_resolution='[448,448]' \
+  --policy.chunk_size=50 \
+  --policy.n_action_steps=50 \
+  --policy.max_state_dim=24 \
+  --policy.max_action_dim=24 \
+  --policy.dropout=0.2 \
+  --policy.optimizer_lr=1e-5 \
+  --policy.optimizer_weight_decay=1e-3 \
+  --policy.optimizer_grad_clip_norm=1.0 \
+  --policy.scheduler_warmup_steps=1000 \
+  --policy.push_to_hub=false \
+  --use_policy_training_preset=true \
+  --batch_size=64 \
+  --steps=80000 \
+  --resume=false \
+  --save_checkpoint=true \
+  --save_checkpoint_to_hub=false \
+  --save_freq=10000 \
+  --log_freq=10 \
+  --env_eval_freq=0 \
+  --num_workers=4 \
+  --prefetch_factor=2 \
+  --persistent_workers=true \
+  --seed=1000 \
+  --wandb.enable=false \
+  --output_dir=./outputs/evo1-libero-stage2-g128-80k
+```
+
+#### 原作者格式的评估配置[[author-format-evaluation-profile]]
+
+原作者格式的 EVO1 LIBERO 配置使用 LIBERO 原始的摄像头特征名称
+（`observation.images.agentview_image` 和 `observation.images.robot0_eye_in_hand_image`），每
+14 个动作重新规划一次，并在推进模拟器之前将夹爪命令二值化。EVO1 策略后处理器
+可以把填充后的 24 维动作裁剪回 7 维的 LIBERO 动作空间，并应用该夹爪二值化。要
+在相同的每任务一个片段（episode）设置下评估原作者格式的检查点，请保留原始摄像头名称，
+而不是使用默认的 `image`/`image2` 映射，并设置 LIBERO 动作后处理标志：
+
+```bash
+lerobot-eval \
+  --policy.path=your-org/your-evo1-libero-checkpoint \
+  --policy.vlm_model_name=OpenGVLab/InternVL3-1B-hf \
+  --policy.device=cuda \
+  --policy.use_flash_attn=true \
+  --policy.n_action_steps=14 \
+  --policy.postprocess_action_dim=7 \
+  --policy.binarize_gripper=true \
+  --env.type=libero \
+  --env.task=libero_object \
+  --env.camera_name_mapping="{agentview_image: agentview_image, robot0_eye_in_hand_image: robot0_eye_in_hand_image}" \
+  --env.observation_height=448 \
+  --env.observation_width=448 \
+  --eval.batch_size=1 \
+  --eval.n_episodes=1
+```
+
+#### 原生 `lerobot/libero` v3 配置[[native-lerobotlibero-v3-profile]]
+
+修订版本 `a1aaacb7f6cd6ee5fb43120f673cebb0cfea7dd4` 将摄像头特征存储为 `image` 和
+`image2`。此示例评估全部十个 LIBERO Object 任务，每个任务都在一个全新的进程中启动：
+
+```bash
+export MUJOCO_GL=egl
+export PYOPENGL_PLATFORM=egl
+
+suite=libero_object
+horizon=280
+for task_id in {0..9}; do
+  lerobot-eval \
+    --policy.path=zuoxingdong/evo1_libero \
+    --policy.pretrained_revision=515921f4a2c1d3f3ad523721eafa26fdf2af315b \
+    --policy.vlm_model_name=OpenGVLab/InternVL3-1B-hf \
+    --policy.device=cuda \
+    --policy.use_amp=true \
+    --policy.vlm_dtype=bfloat16 \
+    --policy.use_flash_attn=false \
+    --policy.enable_gradient_checkpointing=false \
+    --policy.vlm_num_layers=14 \
+    --policy.image_resolution='[448,448]' \
+    --policy.max_text_length=1024 \
+    --policy.chunk_size=50 \
+    --policy.n_action_steps=14 \
+    --policy.max_state_dim=24 \
+    --policy.max_action_dim=24 \
+    --policy.num_inference_timesteps=32 \
+    --policy.postprocess_action_dim=7 \
+    --policy.binarize_gripper=true \
+    --policy.gripper_threshold=0.0 \
+    --policy.gripper_below_threshold_value=-1.0 \
+    --policy.gripper_above_threshold_value=1.0 \
+    --env.type=libero \
+    --env.task="${suite}" \
+    --env.task_ids="[${task_id}]" \
+    --env.camera_name=agentview_image,robot0_eye_in_hand_image \
+    --env.camera_name_mapping="{agentview_image: image, robot0_eye_in_hand_image: image2}" \
+    --env.control_mode=relative \
+    --env.obs_type=pixels_agent_pos \
+    --env.observation_width=448 \
+    --env.observation_height=448 \
+    --env.init_states=true \
+    --env.episode_length="${horizon}" \
+    --env.render_mode=rgb_array \
+    --env.max_parallel_tasks=1 \
+    --eval.n_episodes=50 \
+    --eval.batch_size=1 \
+    --eval.use_async_envs=false \
+    --eval.recording=false \
+    --seed=1000 \
+    --output_dir="./outputs/evo1-libero-stage2-70k-eval/${suite}/task-${task_id}" \
+    --job_name="evo1-libero-stage2-70k-${suite}-task-${task_id}"
+done
+```
+
+对每个套件使用以下时域长度，运行全部十个任务 ID：
+
+| `env.task`       | `env.episode_length` |
+| ---------------- | -------------------: |
+| `libero_spatial` |                `280` |
+| `libero_object`  |                `280` |
+| `libero_goal`    |                `300` |
+| `libero_10`      |                `520` |
+
+为每一行分别设置 `suite` 和 `horizon`。这样每个套件共 500 个片段（episode），总计 2,000 个片段，同时
+循环中每个任务使用全新进程的做法与实测时的 RNG 重置拓扑一致。
+
+## 参考资料[[references]]
+
+- [EVO1 代码仓库](https://github.com/MINT-SJTU/Evo-1)
+- [InternVL3-1B-hf](https://huggingface.co/OpenGVLab/InternVL3-1B-hf)
+
+## 许可证[[license]]
+
+此 LeRobot 集成遵循 LeRobot 所使用的 Apache 2.0 许可证。已发布的检查点和数据的许可证，请查阅上游 EVO1 和 InternVL3 模型页面。

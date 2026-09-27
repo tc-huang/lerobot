@@ -1,0 +1,269 @@
+# FLUX 3 Action[[flux-3-action]]
+
+FLUX 3 Action 根据摄像头观测、状态和任务指令预测机器人动作。一个冻结的
+视频 VAE 和文本编码器为扩散 Transformer 提供输入，由它预测视频潜变量和动作块（action chunk）；
+推理时只返回动作。LeRobot 支持推理和 PEFT：LoRA 适配主干网络（trunk），
+而机器人的动作头和条件头则进行完整训练。
+
+我们提供 `flux-3-action-base` 作为基础动作模型，并提供针对 SO-101 的微调版本 `flux-3-action-so101` 和针对 Franka Panda 机器人的微调版本 `flux-3-action-droid`（在 DROID 数据集上微调）。
+本页的核心示例是基于 `flux-3-action-so101` 模型，通过 LoRA 进行任务适配。
+
+如需从基础模型训练新的机器人形态（embodiment）或进行完整微调，请使用我们独立的
+[flux-action](https://github.com/black-forest-labs/flux-action) 代码仓库。
+
+## 安装[[installation]]
+
+在 LeRobot 代码检出目录中，安装训练、策略、PEFT 和 EMA 依赖：
+
+```bash
+pip install -e ".[training,flux3,peft,diffusion]"
+```
+
+视频 VAE 还需要从 https://whl.natten.org 获取与 torch/CUDA 兼容的 **NATTEN** wheel。
+对于 torch 2.11 和 CUDA 12.8：
+
+```bash
+uv pip install natten==0.21.6+torch2110cu128 --find-links https://whl.natten.org
+```
+
+对于 torch 2.10，请使用 `natten==0.21.6+torch2100cu128`，或针对你的环境自行构建。
+
+## SO-101 任务适配[[so-101-task-adaptation]]
+
+请使用 **30 Hz** 的 LeRobot v3 数据集，其中包含六个绝对指令动作通道和六个测量状态
+通道，二者的关节顺序和单位一致，夹爪位于最后。请提供原始数值、一致的机器人
+标定，并在 `task` 中提供指令。
+
+### 摄像头[[cameras]]
+
+摄像头的名称、数量和布局都可以配置。SO-101 包按两个摄像头
+所拍摄的内容为其命名：
+
+| 摄像头 | 键                         |
+| ------ | -------------------------- |
+| 场景   | `observation.images.scene` |
+| 腕部   | `observation.images.wrist` |
+
+![SO-101 场景摄像头（左）和腕部摄像头（右），画面中有蓝色盒子和容器](https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/lerobot/so101_camera_tiling.png)
+
+可以使用 `--rename_map` 将摄像头名称映射到预期的键，例如：
+
+```bash
+--rename_map='{"observation.images.top":"observation.images.scene","observation.images.gripper_cam":"observation.images.wrist"}'
+```
+
+rollout 时请使用相同的映射；键已匹配时无需映射。参见[重命名映射](https://huggingface.co/docs/lerobot/main/en/rename_map)。
+
+### 加载与训练[[load-and-train]]
+
+从以下位置加载 SO-101 策略：
+[`black-forest-labs/flux-3-action-so101`](https://huggingface.co/black-forest-labs/flux-3-action-so101)。
+保存的配置会自动从 `black-forest-labs/flux-3-action-base` 的一个固定
+修订版本加载共享的 VAE 和文本编码器。
+如果访问受限，请使用有访问权限的账号通过 `hf auth login` 进行认证。
+在 LeRobot 代码检出目录中运行：
+
+```bash
+python -m lerobot.scripts.lerobot_train \
+  --config_path=examples/flux3/lora.json \
+  --policy.path=black-forest-labs/flux-3-action-so101 --policy.device=cuda \
+  --dataset.repo_id=YOUR_ORG/YOUR_SO101_DATASET \
+  --output_dir=outputs/so101_lora
+```
+
+Hub 缓存会保留下载的模型和共享编码器，供恢复训练和适配器推理使用。
+
+固定版本的 SO-101 微调检查点使用 `scene` / `wrist` 摄像头键、八个观测时间步、
+两个独立编码的视觉快照，以及过去动作 / 状态条件。它预测 42 个动作，
+以 30 Hz 执行前 32 个，然后重新规划。其保存的处理器带有与基础模型匹配的归一化
+统计量。这些检查点设置在任务适配期间保持不变。
+共享的 `examples/flux3/lora.json` 只提供训练 / 运行时设置和训练预算；
+每个 Hub 包中也附带同一个文件，名为 `lora.json`。摄像头布局、条件、动作
+表示和损失设置均来自检查点。这些命令保留已保存的
+执行长度 32、引导系数 3/3 和 eager 执行模式。如需使用引导系数 4/1 并启用编译，
+请添加 `--policy.guidance_scale=4 --policy.guidance_scale_action=1 --policy.compile_model=true`。
+
+> **条件实验：** LeRobot 公开了 `n_obs_steps`、`history_snapshots` 和
+> `condition_on_past_actions`。修改它们需要兼容的模型 / 处理器设置并进行
+> 微调；进行常规任务适配时，请保留检查点中保存的值。
+
+该预设启用 rank/alpha 为 32 的 LoRA，以及衰减率为 0.999 的 EMA；不会自动上传任何内容。启用
+新适配器请通过顶层的 `peft` 设置，而不是 `--policy.use_peft=true`，后者用于标识已保存的适配器。
+
+在我们的实验中，EMA 在 DROID 上带来了显著收益，而在 SO-101 上目前的结果
+好坏参半。其收益取决于数据和训练设置。我们建议保持启用 EMA，并
+在相同的 rollout 协议下评估原始检查点和 EMA 检查点，再决定部署哪一个。
+周期性的离线验证损失使用原始权重；它不会自动比较这两个版本。
+
+先从单 GPU 预算开始，以便快速迭代。如需更大的训练预算，请使用相同的配置
+并加上以下覆盖参数：
+
+```bash
+accelerate launch --num_processes=4 --multi_gpu -m lerobot.scripts.lerobot_train \
+  --config_path=examples/flux3/lora.json \
+  --policy.path=black-forest-labs/flux-3-action-so101 --policy.device=cuda \
+  --dataset.repo_id=YOUR_ORG/YOUR_SO101_DATASET \
+  --batch_size=8 --steps=14000 \
+  --output_dir=outputs/so101_lora_large
+```
+
+| 预算             | GPU 数 | 每 GPU 批大小 | 梯度累积 | 有效批大小 | 微步数（`steps`） | 优化器更新次数 |
+| ---------------- | ------ | ------------- | -------- | ---------- | ----------------- | -------------- |
+| 快速迭代（默认） | 1      | 2             | 4        | 8          | 10,000            | 2,500          |
+| 更大预算         | 4      | 8             | 4        | 128        | 14,000            | 3,500          |
+
+有效批大小 = GPU 数 × 每 GPU 批大小 × 梯度累积步数。LeRobot 以微步（microstep）为单位计算 `steps`、`save_freq` 和
+`eval_steps`；除以梯度累积步数即为优化器更新次数。该预设每 500 个微步（125 次更新）
+保存并评估一次。修改梯度累积步数时，请让这三个设置都能被它整除。
+调度器的冻结、预热、衰减和冷却长度同样以微步为单位。设置这些阶段长度时，请将期望的
+优化器更新次数乘以梯度累积系数。
+两种预算使用相同的 LoRA、优化器和 EMA 设置，并保留所加载基础模型的条件、
+动作维度和归一化。检查点同时包含原始适配器和 EMA 适配器。请通过
+留出集评估和 rollout 来选择预算和检查点；更大的批大小并不保证更好的结果。
+
+该预设会留出每个任务最后 20% 的片段（episode）用于评估。请根据硬件调整批大小和梯度累积；
+参见[多 GPU 训练](https://huggingface.co/docs/lerobot/main/en/multi_gpu_training)
+和 [PEFT 训练](https://huggingface.co/docs/lerobot/main/en/peft_training)。
+
+## DROID 任务适配[[droid-task-adaptation]]
+
+**实验性功能：** `examples/flux3/lora.json` 复用了 SO-101 的 PEFT 优化器、LoRA、dropout、
+EMA 和训练预算设置。配置加载已经过检查，但端到端的 DROID PEFT
+训练和任务性能尚未经过验证。
+
+通过仓库 ID 直接加载 [DROID 策略](https://huggingface.co/black-forest-labs/flux-3-action-droid)；
+其共享编码器会自动解析：
+
+```bash
+lerobot-train \
+  --config_path=examples/flux3/lora.json \
+  --policy.path=black-forest-labs/flux-3-action-droid \
+  --dataset.repo_id=YOUR_ORG/YOUR_DROID_TASK_DATASET \
+  --output_dir=outputs/droid_lora
+```
+
+这会使用有效批大小 8 和 2,500 次优化器更新，启用 EMA，并每 125 次更新保存一次原始 / EMA 检查点。
+自动上传到 Hub 的功能已禁用。如需更大的预算，请像 SO-101 示例那样使用四块
+GPU 启动，并添加 `--batch_size=8 --steps=14000`。
+
+该预设会加载 DROID 检查点的摄像头布局、条件、动作表示、控制
+频率和处理器，只覆盖上面列出的训练 / 运行时设置。你的数据集必须符合
+检查点的约定：当前的包使用三个摄像头、八个状态 / 动作通道，以及
+15 Hz 的绝对关节位置指令。如有需要，请使用 `--rename_map` 映射摄像头名称。
+两种机器人使用同一个训练示例；加载或推理时不需要针对特定机器人的配方。
+
+## 默认值与归一化[[defaults-and-normalization]]
+
+新配置使用以下 PEFT 默认值。通过 `--policy.path` 加载时会使用检查点中保存的设置；
+显式的配置 / CLI 覆盖参数优先。DROID 检查点会保留其自身的配置。
+
+| 设置                  | 默认值                                       |
+| --------------------- | -------------------------------------------- |
+| 条件                  | 当前图像和测量状态；1 个快照，不使用过去动作 |
+| 动作                  | 指令增量；以 30 Hz 预测 32 个并执行 32 个    |
+| 摄像头                | 两个视角并排放在 256 × 512 的画布上          |
+| 适配器 / 头部学习率   | `1e-4` / `5e-4`                              |
+| 权重衰减 / 梯度裁剪   | `0` / `1`                                    |
+| 冻结 / 预热           | 无                                           |
+| 梯度检查点 / 图像增强 | 开启 / 关闭                                  |
+
+新配置使用 `n_obs_steps=1`、`history_snapshots=1` 和 `condition_on_past_actions=false`。
+加载检查点时会保留其显式设置的值：固定版本的 SO-101 包使用八个历史
+时间步、两个视觉快照以及过去动作 / 状态条件。`conditioning="history"` 选择
+独立的快照编码；它本身并不决定时间步数。训练时还会
+读取未来的帧和指令作为目标，以及前一个指令以计算动作增量。
+
+摄像头名称 / 顺序、状态 / 动作维度和绝对动作通道仍然因机器人而异。
+SO-101 检查点将最后一个通道保持为绝对值（`delta_absolute_dims=[-1]`），并使用通道权重
+`[1, 1, 1, 1, 1, 2]`。类的默认值不设绝对通道例外，并使用相等的权重。
+
+归一化统计量由基础模型保存的处理器持有。请输入原始的状态 / 动作，并在训练、恢复训练和推理时
+保持相同的统计量。SO-101 包的分位数基于其关节顺序、
+单位和标定；它们并非通用的 SO-101 标定值。如需使用不同的统计量，
+请在训练前准备一个带有匹配处理器的独立基础模型。绝对动作的数据集统计量
+不能替代指令增量的统计量。
+
+训练会保存适配器和训练好的头部，并附带对完整基础模型的引用。重新加载时，请确保该基础模型及
+其冻结编码器文件可以访问；适配器不会自动合并到基础模型中。
+
+## 恢复训练[[resume]]
+
+```bash
+lerobot-train \
+  --config_path=outputs/so101_lora/checkpoints/last/pretrained_model/train_config.json \
+  --resume=true
+```
+
+请从原始的 `pretrained_model` 检查点恢复，它会还原优化器和 EMA 状态。推理时，
+如果启用了 EMA，可以选择与之同级的 `pretrained_model_ema`。请保留每个适配器原本的基础模型
+和处理器；新下载的基础模型不能替代旧适配器所使用的那一个。
+
+## 推理[[inference]]
+
+将 LeRobot 运行器的 `--policy.path` 指向训练好的适配器检查点；它会加载所引用的
+基础模型和保存的处理器。若要配合**完整基础模型**直接调用，请同时加载处理器：
+
+```python
+from lerobot.policies.factory import make_pre_post_processors
+from lerobot.policies.flux3 import Flux3Policy
+
+checkpoint = "black-forest-labs/flux-3-action-so101"
+policy = Flux3Policy.from_pretrained(checkpoint).eval()
+preprocessor, postprocessor = make_pre_post_processors(policy.config, pretrained_path=checkpoint)
+
+# 在每个控制周期都运行，包括动作仍在队列中时：
+prepared = preprocessor(observation)
+normalized_action = policy.select_action(prepared)
+absolute_command = postprocessor(normalized_action)
+```
+
+预处理器会缓存观测 / 指令历史。后处理器会在每个周期撤销归一化、积分
+增量，并更新共享的指令历史。第一个指令以测量状态为
+锚点；之后的指令从前一个指令开始积分。策略的直接输出是归一化后的值，
+必须经过后处理。请在片段（episode）边界或人工干预后重置策略和两个处理器；
+LeRobot 的同步运行器会自动完成这一点。不支持 RTC / 异步推理。
+
+对于默认的单时间步策略，当前图像和测量状态就已足够。若要使用显式增量锚点进行离线
+预测，请提供包含一个前序指令的 `observation.command_history`；
+这会为输出积分提供锚点，而不会向模型的条件中添加指令。显式
+配置了多个观测时间步的检查点需要 `policy.config.n_obs_steps` 个图像 / 状态以及指令
+历史。将输入传入预处理器，调用 `predict_action_chunk`，然后进行后处理。
+`--policy.compile_model=true` 会对冻结的编码器和推理用 DiT 启用惰性编译；
+它不会编译训练用 DiT。
+
+如需降低推理时的显存占用，可在加载完成并调用最后一次 `policy.to(...)` 之后，将 Qwen 移到 CPU：
+
+```python
+policy.frozen.text_encoder.cpu()
+```
+
+这会把约 8.3 GiB 的权重移到主机内存；未缓存的指令编码会变慢，但
+嵌入仍会传输到策略所在设备并被缓存。它不会降低加载期间的
+峰值内存，之后再调用 `policy.to(...)` 会让 Qwen 随策略一起移回。
+
+## 训练其他机器人形态[[training-other-embodiments]]
+
+对于我们尚未提供微调检查点的机器人形态，请从
+[flux-action](https://github.com/black-forest-labs/flux-action) 中的基础模型开始。该工作流需要定义
+机器人的动作头和条件头、摄像头布局、动作表示和归一化。
+仅仅维度相同，并不能让另一个机器人的头部得以复用。
+
+若要在之后用 LeRobot 进行推理或任务适配，请将训练好的模型打包成完整的 LeRobot
+策略，并附带其配置和匹配的处理器。单独的原始权重文件不能作为可加载的
+`--policy.path` 包。本指南重点介绍如何将现有的 SO-101 和 DROID 策略适配到新任务。
+
+所有策略只构建 `video` 和 `video_cond` 内容流，以及机器人的动作流。
+未使用的图像 / 音频权重会在加载前被过滤掉，可节省约 28% 的 DiT 参数，且不
+改变动作预测。保存的流列表不会启用图像 / 音频分支；加载并保存
+完整的基础模型时会记录精简后的布局。针对已移除流的适配器需要其原始
+基础模型和较旧的代码修订版本。
+
+完整策略默认以严格模式加载。在过滤掉已知未使用的流之后，缺失、多余
+或形状错误的权重都会引发错误。显式设置 `strict=False` 仅允许初始化缺失的机器人形态头部，或
+调整尺寸不匹配的机器人形态头部；主干网络权重仍然是必需的，并会检查形状。
+
+## 验证[[validation]]
+
+CPU 测试涵盖了打包、处理器、PEFT 更新以及检查点 / 恢复训练。早先使用真实权重进行的 H200 检查
+早于当前的处理器重构。这个确切的修订版本仍需要 GPU 和
+机器人验证；现有的检查并不能证明四 GPU 的容量，也不能证明在新机器人形态上的 PEFT 质量。

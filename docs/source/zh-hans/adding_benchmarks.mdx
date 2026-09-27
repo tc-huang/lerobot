@@ -47,7 +47,6 @@ dict[str, dict[int, gym.vector.VectorEnv]]
 ```
 
 单任务环境（例如 PushT）类似于 `{"pusht": {0: vec_env}}`。
-
 多任务基准测试（例如 LIBERO）类似于 `{"libero_spatial": {0: vec0, 1: vec1, ...}, ...}`。
 
 ### 评估运行方式
@@ -58,7 +57,7 @@ dict[str, dict[int, gym.vector.VectorEnv]]
 2. `eval_policy_all()` 遍历每个套件和任务。
 3. 对每个任务，通过 `rollout()` 运行 `n_episodes` 次 rollout。
 4. 结果按层级汇总：单回合、任务、套件和总体结果。
-5. 指标包括 `pc_success`（成功率）、`avg_sum_reward` 和 `avg_max_reward`。
+5. 指标包括 `pc_success`（成功率）、`avg_sum_reward` 和 `avg_max_reward`。每个成功率都会附带其计数（`n_episodes` 中的 `n_success`）以及以百分比表示的 95% Wilson 区间（`pc_success_ci95`），并在任务、套件和整体三个层级报告。该区间仅涵盖片段（episode）间的抽样噪声，不反映同一训练配方（recipe）多次训练之间的差异。
 
 关键点是：你的环境必须在每次 `step()` 调用时返回 `info["is_success"]`。评估循环依靠该字段判断任务是否完成。
 
