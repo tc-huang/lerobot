@@ -199,11 +199,11 @@ def make_my_policy_pre_post_processors(
 
 **重要 — 函式命名（function naming）：** LeRobot 透過名稱探索您的處理器（processor）。此函式**必須**命名為 `make_{policy_name}_pre_post_processors`（與您傳給 `@PreTrainedConfig.register_subclass` 的字串相符）。
 
-#### 選用：調整從檢查點載入的處理器（optional: adjusting processors loaded from a checkpoint）[[optional-adjusting-processors-loaded-from-a-checkpoint]]
+#### 選用：調整從檢查點載入的處理器（adjusting processors loaded from a checkpoint）[[optional-adjusting-processors-loaded-from-a-checkpoint]]
 
-`make_{policy_name}_pre_post_processors` 只有在處理器從頭建構時才會執行。只要涉及檢查點（checkpoint）（微調、恢復訓練或評估），LeRobot 會改為載入與權重並存的已序列化管線（pipelines），並套用呼叫端的覆寫（overrides）。
+`make_{policy_name}_pre_post_processors` 只有在處理器從頭建構時才會執行。只要涉及檢查點（微調、恢復訓練或評估），LeRobot 會改為載入與權重並存的已序列化管線（pipelines），並套用呼叫端的覆寫（caller’s overrides）。
 
-如果您的策略（policy）必須調整那些已載入的管線，請在同一個模組中新增一個選用的第二函式，命名為 `make_{policy_name}_pre_post_processors_from_pretrained`。LeRobot 會依相同的命名慣例找到它，並用它取代通用的載入流程。不需要任何特殊處理的策略直接省略它即可。
+如果您的策略（policy）必須調整那些已載入的管線，請在同一個模組中新增一個選用的第二函式，命名為 `make_{policy_name}_pre_post_processors_from_pretrained`。LeRobot 會依相同的命名慣例找到它，並用它取代通用的載入流程。對於不需要任何特殊處理的策略直接省略即可。
 
 ```python
 from lerobot.processor import load_pretrained_policy_processors
@@ -240,7 +240,7 @@ def make_my_policy_pre_post_processors_from_pretrained(
     return preprocessor, postprocessor
 ```
 
-實際範例請見 [`processor_evo1.py`](https://github.com/huggingface/lerobot/blob/main/src/lerobot/policies/evo1/processor_evo1.py)（重新填充正規化統計量）、[`processor_groot.py`](https://github.com/huggingface/lerobot/blob/main/src/lerobot/policies/groot/processor_groot.py)（處理原始上游檢查點），以及 [`processor_molmoact2.py`](https://github.com/huggingface/lerobot/blob/main/src/lerobot/policies/molmoact2/processor_molmoact2.py)（重新命名覆寫鍵）。
+實際範例請見 [`processor_evo1.py`](https://github.com/huggingface/lerobot/blob/main/src/lerobot/policies/evo1/processor_evo1.py)（重新填充正規化的統計量）、[`processor_groot.py`](https://github.com/huggingface/lerobot/blob/main/src/lerobot/policies/groot/processor_groot.py)（處理原始上游檢查點），以及 [`processor_molmoact2.py`](https://github.com/huggingface/lerobot/blob/main/src/lerobot/policies/molmoact2/processor_molmoact2.py)（重新命名 override keys）。
 
 ### 支援文字的策略（text-capable policies）[[text-capable-policies]]
 

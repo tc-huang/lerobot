@@ -338,15 +338,15 @@ dataset.push_to_hub()
 
 ### LanceDB 資料集後端[[lancedb-dataset-backend]]
 
-`v3` 資料集也可以儲存為 [LanceDB](https://lancedb.com) 資料表。LanceDB 是建構於 Lance 格式上的多模態資料湖倉（multimodal data lakehouse），針對 AI 存取模式設計：可快速隨機存取任一資料列及其影片位元組（video bytes），並在同一批資料表上建立純量（scalar）、向量（vector）與全文索引（full-text indexes），因此 EDA、挖掘（mining）、策展（curation）與訓練（training）都能直接從物件儲存（object storage）執行。此布局會保持 `meta/` 不變，並新增一個 `frames` 資料表來存放表格資料（tabular data），以及一個 `videos` 資料表以 blob 形式保存 MP4。`meta/info.json` 中的 `"storage_format": "lance"` 會選擇對應的讀取器（reader）；`LeRobotDataset` API、項目（items）與訓練流程（training pipeline）則維持不變。
+`v3` 資料集也可以儲存為 [LanceDB](https://lancedb.com) 資料表。LanceDB 是建構於 Lance 格式上的多模態 data lakehouse，針對 AI 存取模式設計：可快速隨機存取任一資料列及其影片位元組（bytes），並在同一批資料表上建立純量（scalar）、向量（vector）與全文索引（full-text indexes），因此 EDA、mining、curation 與訓練都能直接從物件儲存（object storage）執行。此布局會保持 `meta/` 不變，並新增一個 `frames` 資料表來存放表格資料（tabular data），以及一個 `videos` 資料表以 blob 形式保存 MP4。`meta/info.json` 中的 `"storage_format": "lance"` 會選擇對應的讀取器（reader）；`LeRobotDataset` API、項目（items）與訓練流程（training pipeline）則維持不變。
 
-- **直接從 Hub 或 HF Storage Buckets 訓練，並讓 GPU 持續滿載。** 隨機影格（Random frames）會就地讀取，且只讀取每個批次（batch）所需的位元組（bytes），因此每個批次都是全域洗牌（global shuffle），且無需先下載任何資料。
+- **從 Hub 或 HF Storage Buckets 直接訓練讓 GPU 不再空等資料。** 隨機影格（random frames）會就地讀取，且只讀取每個批次（batch）所需的位元組（bytes），因此每個批次都是全域洗牌（global shuffle），且無需先下載任何資料。
 - **轉換成本約等於複製檔案。** 影片不會重新編碼（re-encoded），因此項目（items）與來源位元完全相同（bit-identical）。DROID 可在 34 分鐘內完成轉換。
 - **零複製特徵工程（Zero-copy feature engineering）。** 可將分數（scores）、嵌入（embeddings）或修正後的標籤（corrected labels）等欄位（columns）加入訓練器（trainer）讀取的資料表中，而無需重寫影片或複製資料集，接著便能透過索引（indexes）對它們進行篩選與搜尋。讀取器（reader）會忽略它不認識的欄位。
 
 若要了解其運作方式、基準測試（benchmarks）與範例，請參閱 [LanceDB LeRobot 指南](https://docs.lancedb.com/training/lerobot)。
 
-相機特徵（Camera features）必須以影片為基礎（video-backed）。將相機影格（camera frames）以影像形式儲存的資料集不受讀取器（reader）支援，且需要在轉換前重新編碼為影片。
+相機特徵（camera features）必須為 video-backed。將相機影格（camera frames）以影像形式儲存的資料集不受讀取器（reader）支援，且需要在轉換前重新編碼為影片。
 
 讀取 Lance 資料集需要 `lancedb` 額外套件（extra；`pip install "lerobot[lancedb]"`）。此格式為唯讀：請以預設格式錄製與編輯資料集，再使用 [`lerobot-lancedb`](https://pypi.org/project/lerobot-lancedb/) 套件轉換它們：
 
@@ -355,7 +355,7 @@ pip install "lerobot-lancedb"
 lerobot-lance-convert --repo-id lerobot/pusht --out ./pusht-lance  # 或 --root <本機資料集目錄>
 ```
 
-載入時使用相同的類別（class）：
+載入時使用相同的類（class）：
 
 ```python
 from lerobot.datasets import LeRobotDataset
@@ -379,4 +379,4 @@ lerobot-train \
   --policy.type=act
 ```
 
-視覺化（Visualization）可搭配兩種檢視器（viewers）運作。`lerobot-dataset-viz --repo-id lance-format/pusht-lance --episode-index 0` 會如常地在 Rerun 中開啟一個回合（episode），而 `--display-mode foxglove` 則會透過 WebSocket 將其提供給 [Foxglove](https://foxglove.dev)。無論使用哪一種方式，都只會擷取畫面上顯示的影格（frames），不需要匯出或下載 MCAP。
+視覺化可搭配兩種檢視器（viewers）運作。`lerobot-dataset-viz --repo-id lance-format/pusht-lance --episode-index 0` 會如常地在 Rerun 中開啟一個回合（episode），而 `--display-mode foxglove` 則會透過 WebSocket 將其提供給 [Foxglove](https://foxglove.dev)。無論使用哪一種方式，都只會擷取畫面上顯示的影格（frames），不需要匯出或下載 MCAP。
