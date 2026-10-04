@@ -10,8 +10,14 @@
       "title": "动作表示"
     },
     "adding_benchmarks.mdx": {
-      "source_version": "6e9d23bdf1293ca2734f94698cddaba380c5e99c",
+      "source_title": "Adding a New Benchmark",
+      "source_version": "4267939b6f42cbcdf538bae74b79ddefebd69f14",
       "title": "添加新的基准测试"
+    },
+    "annotation_pipeline.mdx": {
+      "source_title": "Annotation Pipeline",
+      "source_version": "611ebb000f96eaa772ab492088c23295e1979a39",
+      "title": "标注流水线"
     },
     "api/cameras.mdx": {
       "source_title": "Cameras",
@@ -132,6 +138,11 @@
       "source_version": "8012d62bc6e723c7e275ba5d4c944437eef63234",
       "title": "升级飞特舵机固件"
     },
+    "flux3.mdx": {
+      "source_title": "FLUX 3 Action (flux3)",
+      "source_version": "13faddbab8614b52d816c7d78e43048a4b1a65b2",
+      "title": "FLUX 3 Action（flux3）"
+    },
     "groot.mdx": {
       "source_title": "NVIDIA GR00T",
       "source_version": "12d67f62db09f2b70b70a267f17e613ec55e6190",
@@ -197,6 +208,11 @@
       "source_version": "f3e63e3c6d7965388573b93838294c28f13aef34",
       "title": "机器人处理器简介"
     },
+    "isaac_teleop.mdx": {
+      "source_title": "Isaac Teleop",
+      "source_version": "6236a5ebc338802e61522bf9255664cbdd0f01b0",
+      "title": "Isaac Teleop"
+    },
     "koch.mdx": {
       "source_title": "Koch v1.1",
       "source_version": "813b9bd67d5ede9b6c400daee56c81ae1770f154",
@@ -237,9 +253,19 @@
       "source_version": "173b81255cb1d1f664d7163cb0800eb1380f7bf8",
       "title": "LIBERO-plus"
     },
+    "lingbot_va.mdx": {
+      "source_title": "LingBot-VA",
+      "source_version": "d33e90340890936073b730fcefe781292406e1ef",
+      "title": "LingBot-VA"
+    },
     "metaworld.mdx": {
       "source_version": "b7accdfa2e1c58d69f7d16d9561bade9731b7262",
       "title": "Meta-World"
+    },
+    "molmoact2.mdx": {
+      "source_title": "MolmoAct2",
+      "source_version": "98d1c3762b4fb866d11f2e572122b3d13c35b09b",
+      "title": "MolmoAct2"
     },
     "multi_gpu_training.mdx": {
       "source_title": "Multi GPU training",
@@ -278,6 +304,11 @@
       "source_title": "π₀ (Pi0)",
       "source_version": "a8934efd2b2a0d7b1afa815ac1ffc853a59a936b",
       "title": "π₀（Pi0）"
+    },
+    "pi05.mdx": {
+      "source_title": "π₀.₅ (Pi05)",
+      "source_version": "d68f969fca846e45becb23dc914a18ebf28470df",
+      "title": "π₀.₅（Pi05）"
     },
     "pi0fast.mdx": {
       "source_title": "π₀-FAST (Pi0Fast)",
@@ -370,6 +401,11 @@
     "third_party_sensors.mdx": {
       "source_version": "34ca8c42e1fce1603e0d5d4c9c55aeed0734e388",
       "title": "第三方摄像头与传感器"
+    },
+    "tools.mdx": {
+      "source_title": "Tools",
+      "source_version": "d888811842c644f3a16640f8fb7a45ec8cf7dba4",
+      "title": "工具"
     },
     "topreward.mdx": {
       "source_title": "TOPReward",
