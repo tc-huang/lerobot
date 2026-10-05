@@ -316,8 +316,8 @@ JSONL，之後由寫入器（writer）重新組合（recomposes）出最終的 p
   僅含工具呼叫的原子
   （tool-call-only atom，`tool_calls=[{type:function, function:{name:"say", arguments:{text:...}}}]`）。
 - **`vqa`。** ECoT（[Zawalski 2024](https://arxiv.org/abs/2407.08693)）提供
-  立基特徵（grounded features，邊界框 bounding boxes `[x_min, y_min, x_max, y_max]` 與
-  關鍵點 keypoints，儲存為 [0, 1] 影像比例 image fractions）以及 Steerable VLA Policies
+  grounded features（bounding boxes `[x_min, y_min, x_max, y_max]` 與
+  keypoints，儲存為 [0, 1] image fractions）以及 Steerable VLA Policies
   （[Zhao 2025](https://arxiv.org/abs/2509.07626)）提供多抽象層級的
   立基（multi-abstraction grounding）。Pi0.7 也會跨抽象層級為答案立基（grounds answers across abstraction levels）。
 
@@ -334,6 +334,6 @@ JSONL，之後由寫入器（writer）重新組合（recomposes）出最終的 p
 約 50 次 VLM 呼叫（calls）。
 
 儲存維持很小（storage stays small）：`language_persistent` 每個回合（episode）最多數十 KB
-（parquet 會對跨影格重複的那一筆項目進行字典編碼），
+（parquet 會對跨影格重複的那一筆項目進行 dictionary-encodes），
 而 `language_events` 在大多數影格（frame）上是空的，其大小會隨
 發出的數量（emissions）而縮放，而非 `num_frames × num_emissions`。
