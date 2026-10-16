@@ -20,6 +20,7 @@ Traditional Chinese (language tag: `zh-hant`).
 
 - Gloss only technical terms, never ordinary words, phrases, or whole clauses. `資料集（dataset）` and `執行（run）` add nothing; `動作區塊（action chunk）` helps.
 - Gloss a term at its first occurrence in each `##` section, and only there. Later occurrences in the same section, including in lists and tables, use the Chinese alone.
+- The core terms `策略（policy）`, `動作（action）`, `觀測（observation）`, `狀態（state）` and `獎勵（reward）` are the exception: gloss each one once per page, at its first occurrence in that sense, and not again in later sections. A gloss on a compound that contains the term, such as `動作空間（action space）`, counts. Never put a gloss inside a compound: write `策略類型（policy type）`, not `策略（policy）類型`. `狀態` in another sense, such as optimizer or processor state, follows the rule above.
 - Write the gloss in lowercase unless it is a proper noun or an acronym: `檢查點（checkpoint）`, `（Hub）`, `（VLA）`.
 - Do not gloss inside headings or table header rows.
 - A gloss never contains another pair of parentheses. If the English already has parentheses, rephrase instead of nesting.
