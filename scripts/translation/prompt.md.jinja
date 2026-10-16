@@ -31,6 +31,7 @@ The main translation rules are listed below. For anything they do not cover, use
   `## Step 2: Environment Setup` → `## 步驟 2：環境設定[[step-2-environment-setup]]` (Traditional Chinese)
 - Derive the slug from the English heading: lowercase → delete every character that is not `a-z`, `0-9`, a space or `-` → replace each run of spaces with a single `-`. Do not strip leading or trailing `-`.
 - If the English heading already carries an `[[anchor]]`, or a link in the English source points at this heading, reuse that anchor instead of deriving one.
+- Every anchor must be unique within the page. When two headings derive the same slug, keep it for the first and append `-1`, `-2`, … to the later ones in document order: three `### Wired version` headings become `[[wired-version]]`, `[[wired-version-1]]` and `[[wired-version-2]]`.
 
 | English heading | slug |
 | --- | --- |
