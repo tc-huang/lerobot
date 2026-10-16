@@ -85,7 +85,7 @@ Use these translations exactly. They are the cases where a different rendering h
 | backward compatibility                  | 向下相容    |                  | Not 向後相容.                                                                  |
 | cheat sheet                             | 速查表      |                  | Not 小抄.                                                                      |
 | access token                            | 存取權杖    |                  |                                                                                |
-| token / tokenizer                       |             | X                | Tokenize is 切分為 token, never 被 tokenize.                                   |
+| token / tokenizer                       |             | X                | Tokenize is 切分為 token, never 被 tokenize. Tokenization is token 化.         |
 | hook                                    |             | X                |                                                                                |
 | adapter (PEFT, LoRA)                    |             | X                | A hardware adapter is 轉接器.                                                  |
 | activation                              |             | X                | Not 激活.                                                                      |
