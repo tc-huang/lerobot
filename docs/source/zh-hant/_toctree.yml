@@ -99,8 +99,8 @@
 - sections:
   - local: inference
     title: 策略部署（Policy Deployment, lerobot-rollout）
-  - local: async
-    title: 使用非同步推論（Async Inference）
+  - local: remote_inference
+    title: 遠端推論
   - local: rtc
     title: 即時分塊（Real-Time Chunking, RTC）
   title: 推論（Inference）
