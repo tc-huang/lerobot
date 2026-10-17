@@ -36,6 +36,7 @@ TRANSLATION_PROMPT_TEMPLATE_NAME = "prompt.md.jinja"
 TRANSLATION_PROMPT_TEMPLATE_DIR = Path(__file__).parent
 LINE_COUNT_TOLERANCE = 10
 BLANK_LINE_COUNT_TOLERANCE = 0
+MAX_RETRY_FEEDBACK_BLOCKS = 10
 API_KEY_ENV = "TRANSLATION_API_KEY"
 
 
@@ -54,6 +55,19 @@ def doc_paths(doc_dir: Path) -> list[Path]:
 
 def doc_file_names(doc_dir: Path) -> set[str]:
     return {path.relative_to(doc_dir).as_posix() for path in doc_paths(doc_dir)}
+
+
+def line_blocks(text: str) -> list[tuple[int, list[str]]]:
+    """Runs of non-blank lines, each paired with the 1-based number of its first line."""
+    blocks: list[tuple[int, list[str]]] = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        if not line.strip():
+            continue
+        if blocks and blocks[-1][0] + len(blocks[-1][1]) == number:
+            blocks[-1][1].append(line)
+        else:
+            blocks.append((number, [line]))
+    return blocks
 
 
 def page_locals(doc_dir: Path) -> set[str]:
@@ -463,17 +477,22 @@ class TranslationPromptBuilder:
             f"{doc_en_title.strip()}\n"
         )
 
-    def build_content_translation_prompt(self, doc_en_content: str) -> str:
+    def build_content_translation_prompt(self, doc_en_content: str, retry_feedback: str | None = None) -> str:
         task_prompt = "This page has no translation yet. Translate the whole English source below."
         prompt = self._prompt_template.render(
             task_prompt=task_prompt,
             lang_prompt=self._lang_prompt,
             doc_source_content=doc_en_content,
+            retry_feedback=retry_feedback,
         )
         return prompt
 
     def build_content_update_prompt(
-        self, doc_en_content: str, doc_en_diff: str, doc_lang_content_old: str
+        self,
+        doc_en_content: str,
+        doc_en_diff: str,
+        doc_lang_content_old: str,
+        retry_feedback: str | None = None,
     ) -> str:
         task_prompt = (
             "This page already has a translation, but the English source changed afterwards. The diff "
@@ -487,6 +506,7 @@ class TranslationPromptBuilder:
             doc_source_content=doc_en_content,
             doc_source_diff=doc_en_diff,
             doc_target_content=doc_lang_content_old,
+            retry_feedback=retry_feedback,
         )
         return prompt
 
@@ -530,8 +550,8 @@ class Translator:
         title_lines = [line.strip() for line in response.splitlines() if line.strip()]
         return title_lines[0] if title_lines else doc_en_title
 
-    def translate_from_scratch(self, doc_en_content: str) -> str:
-        prompt = self._prompt_builder.build_content_translation_prompt(doc_en_content)
+    def translate_from_scratch(self, doc_en_content: str, retry_feedback: str | None = None) -> str:
+        prompt = self._prompt_builder.build_content_translation_prompt(doc_en_content, retry_feedback)
         return self._llm_inference(prompt)
 
     def translate_title(self, doc_en_title: str) -> str:
@@ -542,9 +562,15 @@ class Translator:
         prompt = self._prompt_builder.build_section_title_translation_prompt(doc_en_section_title)
         return self._llm_inference_title(prompt, doc_en_section_title)
 
-    def update_translation(self, doc_en_content: str, doc_en_diff: str, doc_lang_content_old: str) -> str:
+    def update_translation(
+        self,
+        doc_en_content: str,
+        doc_en_diff: str,
+        doc_lang_content_old: str,
+        retry_feedback: str | None = None,
+    ) -> str:
         prompt = self._prompt_builder.build_content_update_prompt(
-            doc_en_content, doc_en_diff, doc_lang_content_old
+            doc_en_content, doc_en_diff, doc_lang_content_old, retry_feedback
         )
         return self._llm_inference(prompt)
 
@@ -571,6 +597,30 @@ class TranslationChecker:
             self._check_blank_line_count(en_content, translation_result),
         )
         return [failure for failure in failures if failure is not None]
+
+    def _block_mismatches(self, en_content: str, translation_result: str) -> list[str]:
+        en_blocks = line_blocks(en_content)
+        translated_blocks = line_blocks(translation_result)
+        mismatches: list[str] = []
+        for (start, en_lines), (_, translated_lines) in zip(en_blocks, translated_blocks, strict=False):
+            if len(en_lines) == len(translated_lines):
+                continue
+            end = start + len(en_lines) - 1
+            where = f"line {start}" if start == end else f"lines {start}-{end}"
+            mismatches.append(
+                f'the block at English {where}, starting "{en_lines[0].strip()[:60]}", has '
+                f"{len(en_lines)} lines in English but {len(translated_lines)} in your output"
+            )
+            # once a block is missing or extra, the blocks after it no longer pair up
+            if len(en_blocks) != len(translated_blocks) or len(mismatches) == MAX_RETRY_FEEDBACK_BLOCKS:
+                break
+        return mismatches
+
+    def retry_feedback(self, en_content: str, translation_result: str) -> str:
+        problems = self.check_all(en_content, translation_result) + self._block_mismatches(
+            en_content, translation_result
+        )
+        return "\n".join(f"- {problem}" for problem in problems)
 
 
 class DocAction(StrEnum):
@@ -694,13 +744,15 @@ class TranslationPipeline:
             )
 
         check_failures: list[str] = []
+        retry_feedback = None
         for attempt in range(1, self._max_attempts + 1):
-            translated_content = self._translator.translate_from_scratch(source_doc_content)
+            translated_content = self._translator.translate_from_scratch(source_doc_content, retry_feedback)
             check_failures = self._translation_checker.check_all(source_doc_content, translated_content)
             if not check_failures:
                 self._target_docs.add_doc(file_name, translated_content, translated_doc_title)
                 action, attempts = DocAction.ADDED, attempt
                 break
+            retry_feedback = self._translation_checker.retry_feedback(source_doc_content, translated_content)
         else:
             action, attempts = DocAction.SKIPPED, self._max_attempts
 
@@ -725,14 +777,15 @@ class TranslationPipeline:
             )
 
         check_failures: list[str] = []
+        retry_feedback = None
         for attempt in range(1, self._max_attempts + 1):
             if source_doc_diff == "":
                 updated_content = doc_lang_content_old
             elif source_doc_diff is None:
-                updated_content = self._translator.translate_from_scratch(source_doc_content)
+                updated_content = self._translator.translate_from_scratch(source_doc_content, retry_feedback)
             else:
                 updated_content = self._translator.update_translation(
-                    source_doc_content, source_doc_diff, doc_lang_content_old
+                    source_doc_content, source_doc_diff, doc_lang_content_old, retry_feedback
                 )
             if source_doc_diff != "":
                 check_failures = self._translation_checker.check_all(source_doc_content, updated_content)
@@ -740,6 +793,7 @@ class TranslationPipeline:
                 self._target_docs.update_doc(file_name, updated_content, translated_doc_title)
                 action, attempts = DocAction.UPDATED, attempt
                 break
+            retry_feedback = self._translation_checker.retry_feedback(source_doc_content, updated_content)
         else:
             action, attempts = DocAction.SKIPPED, self._max_attempts
 

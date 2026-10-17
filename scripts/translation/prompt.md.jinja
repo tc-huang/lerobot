@@ -63,3 +63,13 @@ The main translation rules are listed below. For anything they do not cover, use
 # Target language MDX Old Content
 {{ doc_target_content }}
 {% endif %}
+{% if retry_feedback %}
+
+# Rejected Previous Attempt
+
+Your previous output for this page was rejected because its lines no longer match the English source:
+
+{{ retry_feedback }}
+
+Redo the task and keep the English line breaks exactly.
+{% endif %}
