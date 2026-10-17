@@ -79,6 +79,11 @@
       "source_version": "4826c947ecc2df9a7dfc5184d5847cf1029ec63c",
       "title": "除錯你的處理器管線（debugging your processor pipeline）"
     },
+    "dm05.mdx": {
+      "source_title": "DM05",
+      "source_version": "7ee6762a6f9da939dfec00d9def08dee3aaadf33",
+      "title": "DM05"
+    },
     "earthrover_mini_plus.mdx": {
       "source_version": "9a632656747aa874543e7ae3a358782dddb663d2",
       "title": "Earth Rover Mini"
@@ -117,6 +122,11 @@
     "feetech.mdx": {
       "source_version": "8012d62bc6e723c7e275ba5d4c944437eef63234",
       "title": "更新 Feetech 韌體（Updating Feetech Firmware）"
+    },
+    "fineart_vla.mdx": {
+      "source_title": "FineART-VLA",
+      "source_version": "8125bd5de6389fe8bfaa4069e1408bd3f618d492",
+      "title": "FineART-VLA"
     },
     "flux3.mdx": {
       "source_title": "FLUX 3 Action (flux3)",
@@ -164,7 +174,7 @@
     },
     "inference.mdx": {
       "source_title": "Policy Deployment (lerobot-rollout)",
-      "source_version": "2b2268774aedef4bcd8f1b295efd5cc066a9bc96",
+      "source_version": "f6eae06a6ff4507760ab3c4572314cf8948e7f35",
       "title": "策略部署（Policy Deployment, lerobot-rollout）"
     },
     "installation.mdx": {
@@ -371,6 +381,11 @@
       "source_title": "PyTorch accelerators",
       "source_version": "a84c69378e02baff6c1877f53a73844a47afd3b7",
       "title": "PyTorch 加速器（PyTorch accelerators）"
+    },
+    "training_dataset_streaming.mdx": {
+      "source_title": "Training Dataset Streaming",
+      "source_version": "b791f6d4dc98641183f04c1e561e761d49854dab",
+      "title": "訓練資料集串流（Training Dataset Streaming）"
     },
     "unitree_g1.mdx": {
       "source_title": "Unitree G1",
