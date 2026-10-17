@@ -16,7 +16,9 @@ The main translation rules are listed below. For anything they do not cover, use
 
 - The number of paragraphs must match the English source **exactly**.
 - The number of headings and their levels must match the English source **exactly**.
-- Where possible, keep a line-by-line correspondence with the English source.
+- Keep the English line breaks: each line of the source becomes exactly one line of the output, and every blank line stays where it is.
+  The source hard-wraps long paragraphs, so a sentence often continues on the next line. Translate it across the same lines anyway: never join wrapped lines into one, and never split a line into two.
+  Words may move between the lines of a paragraph when the target word order requires it.
 - Every MDX component must be preserved.
 - Copy every `[[autodoc]]` line, and the member list indented under it, verbatim.
 
