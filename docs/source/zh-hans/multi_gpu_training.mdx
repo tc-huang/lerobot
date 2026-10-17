@@ -51,7 +51,7 @@ accelerate launch --num_processes=2 $(which lerobot-train) \
 
 ## 批次语义、学习率与步数[[batch-semantics-learning-rate-and-steps]]
 
-`dp_replicate × dp_shard` 个数据并行工作进程各自在每个训练步加载自己的 `--batch_size` 微批次（micro-batch），因此一个训练步会消耗 `batch_size × dp_world_size` 个样本，而这些样本要再乘以 `gradient_accumulation_steps` 才会进入一次优化器更新：
+每个数据并行工作进程在每个训练步加载一个大小为 `--batch_size` 的微批次。因此，每个训练步共处理 `batch_size × dp_world_size` 个样本；每累积 `gradient_accumulation_steps` 个训练步，执行一次优化器更新。有效批次大小为：
 
 ```
 effective_batch_size = batch_size × dp_world_size × gradient_accumulation_steps
@@ -59,7 +59,7 @@ effective_batch_size = batch_size × dp_world_size × gradient_accumulation_step
 
 训练启动时的横幅会打印这一分解。`--steps` 统计的是循环步数（每个工作进程的微批次数），而不是优化器更新次数。
 
-梯度累积是一等标志（flag）：
+梯度累积可通过专用命令行参数配置：
 
 ```bash
 torchrun --nproc-per-node=2 $(which lerobot-train) \
@@ -165,7 +165,7 @@ lerobot-convert-dcp --checkpoint_dir=... --delete_dcp=true --push_to_hub=${HF_US
 
 ### 恢复训练[[resuming]]
 
-使用 `--resume=true --config_path=.../checkpoints/last/pretrained_model/train_config.json` 恢复训练。从 DCP 检查点恢复时，支持将模型和优化器状态重新分片到 _当前_ 的拓扑结构，这意味着你可以用不同的 `dp_replicate/dp_shard` 划分来恢复。数据采样器（data sampler）始终能在正确的 epoch 和偏移处恢复，但只有在 world size 与批次大小都与原始训练一致时才是 _样本精确_ 的（否则会记录一条警告）。
+使用 `--resume=true --config_path=.../checkpoints/last/pretrained_model/train_config.json` 恢复训练。从 DCP 检查点恢复时，支持将模型和优化器状态重新分片到 _当前_ 的拓扑结构，这意味着你可以用不同的 `dp_replicate/dp_shard` 划分来恢复。数据采样器（data sampler）始终能在正确的 epoch 和偏移处恢复，但只有在 world size 和批次大小均与原始训练一致时，才能精确恢复相同的采样序列；否则会记录警告。
 
 > [!NOTE]
 > LeRobot 0.6.x 及更早版本写入的 FSDP 检查点使用不同的磁盘布局（聚合后的完整优化器状态），**无法恢复**。

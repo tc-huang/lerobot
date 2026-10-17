@@ -157,7 +157,7 @@ lerobot-rollout \
 | `Enter` | 将数据集推送到 Hub（仅纠正模式） |
 | `ESC`   | 停止会话                         |
 
-也支持通过 `--strategy.input_device=pedal` 使用脚踏开关输入。使用 `--strategy.pedal.*` 参数配置脚踏开关代码。
+也支持通过 `--strategy.input_device=pedal` 使用脚踏开关输入。使用 `--strategy.pedal.*` 参数配置脚踏开关的按键码。
 
 若机器人支持 rollout 的位置保持，暂停时会更新驱动程序实际应用的最后一个位置目标，包含其截断（clipping）处理与夹爪目标。在发送第一个命令之前，则由一个经过验证的测量姿态提供目标。这会保留命令位置的误差，而不是把目标改成测量到的姿态；机器人可以继续朝该目标稳定下来，同时策略的轨迹推进会停止。请在实际机器人上验证负载下的手臂与夹爪行为；这种软件位置保持并不保证能维持抓握或让机器人完全静止。
 
@@ -306,7 +306,7 @@ lerobot-rollout \
 | `--inference.rtc.mode`                      | `guided`（默认），或适用于兼容 Pi05 检查点、使用已训练前缀的 `trained`                     |
 | `--inference.rtc.max_guidance_weight`       | 一致性约束的强度（默认：因策略而异）                                                       |
 | `--inference.rtc.prefix_attention_schedule` | 混合调度：`LINEAR`、`EXP`、`ONES`、`ZEROS`                                                 |
-| `--inference.queue_threshold`               | 背压（backpressure）阈值；已训练的 RTC 至少需要设为其最大延迟                              |
+| `--inference.queue_threshold`               | 背压（backpressure）阈值；使用 `trained` 模式时，该值必须至少等于检查点的最大延迟步数 `rtc_training_max_delay`                              |
 | `--inference.action_starvation_grace_s`     | 在受支持的机器人上，动作耗尽（starvation）后等待新动作的时间（默认 `1.0`；`0` 会立即故障） |
 
 详细参数调优方法请参阅[实时分块](./rtc)指南。
@@ -333,7 +333,7 @@ OpenArm、Reachy2 与双臂包装器有设置上的限制，列于
 
 | 参数                    | 默认值  | 意义                           |
 | ----------------------- | ------- | ------------------------------ |
-| `max_observation_age_s` | `5 s`   | 直到动作运行为止的最大来源年龄 |
+| `max_observation_age_s` | `5 s`   | 从源观测采集到动作执行时，允许经过的最大时长 |
 | `action_timeout_s`      | `10 s`  | 尚未完成的动作请求             |
 | `startup_timeout_s`     | `120 s` | 初始准备与以全新动作启动       |
 | `language_timeout_s`    | `120 s` | 已规划的语言操作               |
@@ -507,14 +507,14 @@ serve_thread.start()
 
 controller.start()                        # 机器人开始策略
 controller.set_task("grab the red cube")  # 在运行中重新下指令
-controller.reset()                        # 停止移动、返回原点、保持预热
+controller.reset()                        # 停止移动、返回启动时的位置，保持策略已加载
 controller.stop()                         # 结束 serve()
 
 serve_thread.join()
 strategy.teardown(ctx)  # 收尾（teardown）仍由调用端负责
 ```
 
-`RolloutController` 要求上下文的关闭事件必须是 `LinkedEvent`，并按上方的方式构建：控制器会通过自己的参数结束运行段，而你的 `parent` 事件仍可强制完整关闭。除非你想听语音公告，否则请设置 `play_sounds=False`。
+`RolloutController` 要求上下文的关闭事件必须是 `LinkedEvent`，并按上方的方式构建：控制器会通过其本地标志结束运行段，而你的 `parent` 事件仍可强制完整关闭。除非你想听语音公告，否则请设置 `play_sounds=False`。
 
 ---
 
@@ -562,7 +562,7 @@ Cadence summary — whole run, 2 episodes · target 30 Hz × 2 (16.7 ms tick slo
 
 从上往下读：**effective cadence** 是相对于 `--fps` 实际达到的节奏，**cycles over budget** 是循环无法维持目标的频率，**step breakdown** 说明时间花在哪里，而 **pacing headroom** 接近零，代表已经没有余量吸收一次较慢的控制周期（tick）。`infer` 占比偏高，表示瓶颈在策略或设备；`observe` 占比偏高，则表示瓶颈在相机。某个步骤的 `worst` 远高于 `mean`，代表是偶发事件——在上例中，`record` 每个帧为 0.67 ms，而 620 ms 的离群值，是结束某个 episode 时发生阻塞的 `save_episode`。
 
-这里的一个 _cycle_ 是相当于一个策略动作的控制周期数（`--interpolation_multiplier` 个）。只有整个 cycle 超出 `1/fps` 预算时才会让你掉帧（frame）；单一控制周期超出其时间槽只会让插值后的动作较不平顺，这也是两者分开计算的原因。若未使用插值，一个 cycle 就是单一控制周期，因此报告会省略这项区分，全程以控制周期计算。
+这里的一个 _周期（cycle）_ 包含执行一个策略动作所需的全部控制节拍（tick），共 `--interpolation_multiplier` 个。只有整个周期超出 `1/fps` 的时间预算，才可能造成丢帧；单个节拍超出其时间片只会降低插值运动的平滑度，这也是两者分开统计的原因。不使用插值时，一个周期就是一个节拍，因此报告会省略这一区分，全程以节拍统计。
 
 在[交互会话](#interactive-sessions)中，每个 `/start` 运行段都有自己的计时器，因此报告会在每个运行段结束时（`/reset`、`/stop` 或 `--duration`）出现在对话中，而不是每个进程（process）只出现一次。
 
