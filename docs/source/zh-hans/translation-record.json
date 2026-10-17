@@ -14,6 +14,11 @@
       "source_version": "4267939b6f42cbcdf538bae74b79ddefebd69f14",
       "title": "添加新的基准测试"
     },
+    "annotation_pipeline.mdx": {
+      "source_title": "Annotation Pipeline",
+      "source_version": "611ebb000f96eaa772ab492088c23295e1979a39",
+      "title": "标注流水线"
+    },
     "api/cameras.mdx": {
       "source_title": "Cameras",
       "source_version": "2b8c83b96ac42020485f5b4d4507cac9f0275680",
@@ -134,6 +139,16 @@
       "source_version": "8012d62bc6e723c7e275ba5d4c944437eef63234",
       "title": "升级飞特舵机固件"
     },
+    "fineart_vla.mdx": {
+      "source_title": "FineART-VLA",
+      "source_version": "8125bd5de6389fe8bfaa4069e1408bd3f618d492",
+      "title": "FineART-VLA"
+    },
+    "flux3.mdx": {
+      "source_title": "FLUX 3 Action (flux3)",
+      "source_version": "13faddbab8614b52d816c7d78e43048a4b1a65b2",
+      "title": "FLUX 3 Action（flux3）"
+    },
     "groot.mdx": {
       "source_title": "NVIDIA GR00T",
       "source_version": "12d67f62db09f2b70b70a267f17e613ec55e6190",
@@ -180,7 +195,8 @@
       "title": "LeRobot"
     },
     "inference.mdx": {
-      "source_version": "f7b194a261f651aa750e1e887ffb1bec3f5e9651",
+      "source_title": "Policy Deployment (lerobot-rollout)",
+      "source_version": "f6eae06a6ff4507760ab3c4572314cf8948e7f35",
       "title": "策略部署（lerobot-rollout）"
     },
     "installation.mdx": {
@@ -197,6 +213,11 @@
       "source_title": "Introduction to Robot Processors",
       "source_version": "f3e63e3c6d7965388573b93838294c28f13aef34",
       "title": "Robot Processors 简介"
+    },
+    "isaac_teleop.mdx": {
+      "source_title": "Isaac Teleop",
+      "source_version": "6236a5ebc338802e61522bf9255664cbdd0f01b0",
+      "title": "Isaac Teleop"
     },
     "koch.mdx": {
       "source_title": "Koch v1.1",
@@ -238,9 +259,19 @@
       "source_version": "173b81255cb1d1f664d7163cb0800eb1380f7bf8",
       "title": "LIBERO-plus"
     },
+    "lingbot_va.mdx": {
+      "source_title": "LingBot-VA",
+      "source_version": "d33e90340890936073b730fcefe781292406e1ef",
+      "title": "LingBot-VA"
+    },
     "metaworld.mdx": {
       "source_version": "b7accdfa2e1c58d69f7d16d9561bade9731b7262",
       "title": "Meta-World"
+    },
+    "molmoact2.mdx": {
+      "source_title": "MolmoAct2",
+      "source_version": "d79e8710ffe91143482fd1e894e6579bd1186e43",
+      "title": "MolmoAct2"
     },
     "multi_gpu_training.mdx": {
       "source_title": "Multi GPU training",
@@ -345,7 +376,8 @@
       "title": "RoboTwin 2.0"
     },
     "rtc.mdx": {
-      "source_version": "7ba1363674ec8f86e6ef4245f025ecf37c4d1fb4",
+      "source_title": "Real-Time Chunking (RTC)",
+      "source_version": "dffb3bc51f8349350513af34a874c34ed7511b88",
       "title": "实时分块（RTC）"
     },
     "sarm.mdx": {
@@ -382,6 +414,11 @@
       "source_version": "128102caf346e57f5a5d8c7c5e0fa2d8c449a4a9",
       "title": "第三方摄像头与传感器"
     },
+    "tools.mdx": {
+      "source_title": "Tools",
+      "source_version": "d888811842c644f3a16640f8fb7a45ec8cf7dba4",
+      "title": "工具"
+    },
     "topreward.mdx": {
       "source_title": "TOPReward",
       "source_version": "f84fbed49941cddc341dc0d91abab162c968ee5f",
@@ -391,6 +428,11 @@
       "source_title": "PyTorch accelerators",
       "source_version": "a84c69378e02baff6c1877f53a73844a47afd3b7",
       "title": "PyTorch 加速器"
+    },
+    "training_dataset_streaming.mdx": {
+      "source_title": "Training Dataset Streaming",
+      "source_version": "b791f6d4dc98641183f04c1e561e761d49854dab",
+      "title": "训练数据集流式加载"
     },
     "unitree_g1.mdx": {
       "source_title": "Unitree G1",
