@@ -61,7 +61,7 @@ lerobot-train \
 | 參數                          | LIBERO 值                               | 意義                                                            |
 | ----------------------------- | --------------------------------------- | --------------------------------------------------------------- |
 | `dataset.repo_id`             | `lerobot/libero`                        | 標準的 LeRobot 訓練資料集                                       |
-| `policy.path`                 | `lerobot/dm05_base`                     | 獨立的基礎檢查點                                            |
+| `policy.path`                 | `lerobot/dm05_base`                     | 獨立的基礎檢查點                                                |
 | `rename_map`                  | `image`/`image2` 對應到 `front`/`wrist` | 評估指令與 `lerobot/dm05_libero` 使用的相機名稱                 |
 | `policy.add_state`            | `false`                                 | 符合 OpenDM 不含狀態 token 的 LIBERO 提示詞                     |
 | `policy.use_relative_actions` | `false`（檢查點預設值）                 | 原樣學習儲存的動作；相對模式需要明確選擇啟用                    |
