@@ -21,7 +21,7 @@ pip install -e ".[libero,dm05]"     # 在 Linux 上進行 LIBERO 評估
 並支援 `DM05Policy.from_pretrained()`。
 
 基礎設定記錄了 OpenDM 的契約：狀態（state）與動作皆為 14 維。DM05 的核心模型最多支援 32
-維；全新微調（fine-tuning）時，會從目標資料集解析實際使用的影像、狀態與動作特徵。
+維；全新微調（fresh fine-tuning）時，會從目標資料集解析實際使用的影像、狀態與動作特徵。
 
 ## 資料集契約[[dataset-contract]]
 
@@ -61,7 +61,7 @@ lerobot-train \
 | 參數                          | LIBERO 值                               | 意義                                                            |
 | ----------------------------- | --------------------------------------- | --------------------------------------------------------------- |
 | `dataset.repo_id`             | `lerobot/libero`                        | 標準的 LeRobot 訓練資料集                                       |
-| `policy.path`                 | `lerobot/dm05_base`                     | 自成一體的基礎檢查點                                            |
+| `policy.path`                 | `lerobot/dm05_base`                     | 獨立的基礎檢查點                                            |
 | `rename_map`                  | `image`/`image2` 對應到 `front`/`wrist` | 評估指令與 `lerobot/dm05_libero` 使用的相機名稱                 |
 | `policy.add_state`            | `false`                                 | 符合 OpenDM 不含狀態 token 的 LIBERO 提示詞                     |
 | `policy.use_relative_actions` | `false`（檢查點預設值）                 | 原樣學習儲存的動作；相對模式需要明確選擇啟用                    |
@@ -74,7 +74,7 @@ lerobot-train \
 
 ### 相機[[cameras]]
 
-相機組合是策略設定的一部分，提示詞一律只會渲染這些相機。從
+相機集合是策略設定的一部分，提示詞一律只會渲染這些相機。從
 未宣告任何相機的 `lerobot/dm05_base` 微調時，會採用訓練資料集的相機。微調後的檢查點則保留
 自己的相機名稱：若資料集的名稱不同，請用 `--rename_map` 將它們對應過去，例如
 `--rename_map='{"observation.images.top": "observation.images.front"}'`。

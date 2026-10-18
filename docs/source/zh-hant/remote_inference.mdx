@@ -264,7 +264,7 @@ uv run --no-sync lerobot-policy-server --config_path=server.yaml \
 
 對於對齊與 RTC，檢查**裁剪後可用播放**，而不是名目區塊長度。若推論在 1.67 秒的預測中花費 1 秒，則只剩約 0.67 秒。另一個 1 秒請求無法放入；沒有任何補充值能解決。減少往返時間、使用更長的支援時域，或驗證不同的動作頻率。
 
-來源年齡包含執行。對於附加，允許大約 `execution horizon + effective refill` 再加上擷取／推論餘裕。在 30 Hz 下，100 步區塊已跨越 3.33 秒。對齊通常會降低年齡，但重複混合可能保留較舊的貢獻者。
+來源資料的時效也包含執行時間。對於附加，允許大約 `execution horizon + effective refill` 再加上擷取／推論餘裕。在 30 Hz 下，100 步區塊已跨越 3.33 秒。對齊通常會降低時效，但重複混合可能保留較舊的貢獻者。
 
 ## 閱讀日誌並診斷執行[[read-the-logs-and-diagnose-a-run]]
 

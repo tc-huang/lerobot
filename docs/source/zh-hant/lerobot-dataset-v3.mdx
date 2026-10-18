@@ -136,7 +136,7 @@ for batch in data_loader:
 
 ## 在訓練期間串流資料集[[stream-a-dataset-during-training]]
 
-設定 `--dataset.streaming=true`，即可在訓練時不必先下載資料集的 Parquet 與影片檔案。回合會即時抓取到有上限的記憶體池中，而且在每個 epoch 中，每個被選取的影格仍只會被造訪一次：
+設定 `--dataset.streaming=true`，即可在訓練時不必先下載資料集的 Parquet 與影片檔案。回合會即時抓取到有限的記憶體池中，而且在每個 epoch 中，每個被選取的影格仍只會被造訪一次：
 
 ```bash
 lerobot-train \
@@ -157,7 +157,7 @@ bucket_dataset = StreamingLeRobotDataset("my-org/my-bucket", repo_type="bucket")
 
 在命令列介面上，可以使用 `--dataset.repo_type=bucket` 或 `--dataset.root=hf://buckets/my-org/my-bucket` 來選擇 bucket。
 
-關於 worker 與分片如何對應到串流的並行處理、MP4 sidecar 索引、記憶體設定、接續訓練與疑難排解，請參閱[訓練資料集串流](./training_dataset_streaming)。
+關於 worker 與分片（shards）如何對應到串流的並行處理、MP4 sidecar 索引、記憶體設定、接續訓練與疑難排解，請參閱[訓練資料集串流](./training_dataset_streaming)。
 
 <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
   <figure style="margin:0; text-align:center;">
@@ -295,7 +295,7 @@ lerobot-train \
 - 需要加速器；`--policy.device=cpu` 會被拒絕。以手工建立、帶有自己 `image_transforms` 可呼叫物件的資料集也會被拒絕，因為那些會在 worker 中執行。
 - 支援 dataloader 後端所支援的每一種轉換類型。沒有批次實作的類型（`JPEGCompression`，以及 `ColorJitter`、`RandomAffine`、`RandomRotation` 與 `Identity` 以外的 torchvision 類別）會在批次內一次套用一個樣本，因此無法獲得加速；`JPEGCompression` 還會經過 CPU 來回處理。會改變影格大小的轉換，在超過一個樣本的批次上會被拒絕。
 - 可透過 `--seed` 重現，每個行程會使用不同的種子。資料增強不會消耗策略的隨機串流，而 `gpu_compile` 與 `gpu_chunk_size` 也不會改變實際套用的內容。
-- 兩個後端都會以浮點數執行相同的批次轉換，並在最後捨入一次，因此在相同參數下，同一個樣本在其中一個後端增強的結果，會等於在另一個後端增強的結果。
+- 兩個後端都會以浮點數執行相同的批次轉換，並在最後取整數（round）一次，因此在相同參數下，同一個樣本在其中一個後端增強的結果，會等於在另一個後端增強的結果。
 - `gpu_compile` 每種影像尺寸會花費 15-30 秒（僅一次）。尖峰記憶體約為批次影像的兩份浮點副本，再加上一個區塊的數份副本；若記憶體吃緊，請調低 `gpu_chunk_size`。`random_order=true` 會讓轉換時間乘以 `max_num_transforms`。
 
 ## 遷移 `v2.1` → `v3.0`[[migrate-v21-v30]]

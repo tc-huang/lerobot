@@ -198,7 +198,7 @@ python src/lerobot/robots/unitree_g1/run_g1_server.py --camera
 
 ### 執行移動策略[[run-the-locomotion-policy]]
 
-你可以從筆電透過乙太網路、透過 WiFi（實驗性），或直接在機器人上執行遙操作使用者端。請留意網路可能造成的延遲。
+你可以從筆電透過乙太網路、透過 WiFi（實驗性），或直接在機器人上執行遙操作用戶端。請留意網路可能造成的延遲。
 
 **在你的筆電上：**
 
@@ -303,7 +303,7 @@ lerobot-rollout \
   --inference.type=rtc
 ```
 
-G1 移動控制器未宣告 rollout 可恢復等待機制所使用的保留目標契約。動作開始後，若其動作緩衝區耗盡，會造成終止性故障，而不是寬限期等待。請求期限與觀測資料年齡限制同樣適用。使用此做法前，請先驗證策略可用的區塊能涵蓋推論延遲；參見[本機 RTC 等待與預算](./inference#inference-backends)。SONIC 有另一套保留 token 契約，說明如下。
+G1 的移動控制器未宣告 rollout 的可恢復等待機制所使用的保留目標契約。動作開始後，若其動作緩衝區耗盡，會造成終止性故障，而不是寬限期等待。請求期限與觀測資料的時效上限（observation-age limits）同樣適用。使用此做法前，請先驗證策略可用的區塊能涵蓋推論延遲；參見[本機 RTC 等待與預算](./inference#inference-backends)。SONIC 有另一套保留 token 契約，說明如下。
 
 ---
 
@@ -330,7 +330,7 @@ lerobot-rollout \
 
 ### 在實體機器人上執行[[run-on-the-physical-robot]]
 
-在 GPU 機器上執行[遠端推論](./remote_inference)策略伺服器，並將機器人橋接器、SONIC 解碼器與 rollout 使用者端留在 G1 Jetson 上。只有 64 維的 token 區塊會經過網路；解碼器與 50 Hz 的 `rt/lowcmd` 迴圈仍留在機器人上。
+在 GPU 機器上執行[遠端推論](./remote_inference)策略伺服器，並將機器人橋接器、SONIC 解碼器與 rollout 用戶端留在 G1 Jetson 上。只有 64 維的 token 區塊會經過網路；解碼器與 50 Hz 的 `rt/lowcmd` 迴圈仍留在機器人上。
 
 在兩台機器上安裝 remote 額外套件。在 G1 上則保留 Unitree 額外套件：
 

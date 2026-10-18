@@ -61,7 +61,7 @@ FineART-VLA 與 EO-1 一樣，會將預設配方內嵌在 `FineARTVLAConfig` 中
 
 使用 `--policy.recipe_path=/path/to/custom.yaml` 覆寫預設值。
 `src/lerobot/configs/recipes/` 中的共用配方保留了 main 分支的語意；
-FineART-VLA 不會取代它們。若只想以目標進行訓練，請使用內嵌配方，其中只包含
+FineART-VLA 不會取代它們。若只想以目標進行訓練，請使用內嵌配方（inline recipe），其中只包含
 一則含有 `${task}` 的低階使用者訊息，或是設定 `recipe=None`，並
 停用文字/FAST 損失，以使用一般的 PI05 管線。
 

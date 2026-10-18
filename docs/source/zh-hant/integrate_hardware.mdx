@@ -12,7 +12,7 @@
 
 ## 選擇你的馬達[[choose-your-motors]]
 
-如果你使用的是 Feetech 或 Dynamixel 馬達，LeRobot 已內建匯流排（bus）介面 [`SerialMotorsBus`](https://github.com/huggingface/lerobot/blob/main/src/lerobot/motors/motors_bus.py)，它可驅動這兩個系列：每個馬達的型號會告訴它該用哪一種。請參閱它以了解其 API。它需要 `serial-motors` 額外套件，該套件會安裝 rustypot：`pip install 'lerobot[serial-motors]'`，或從原始碼 checkout 執行 `pip install -e ".[serial-motors]"`。
+如果你使用的是 Feetech 或 Dynamixel 馬達，LeRobot 提供內建的匯流排（bus）介面 [`SerialMotorsBus`](https://github.com/huggingface/lerobot/blob/main/src/lerobot/motors/motors_bus.py)，它可驅動這兩個系列：每個馬達的型號會告訴它該用哪一種。請參閱它以了解其 API。它需要 `serial-motors` 額外套件，該套件會安裝 rustypot：`pip install 'lerobot[serial-motors]'`，或從原始碼 checkout 執行 `pip install -e ".[serial-motors]"`。
 若想看它如何使用的良好範例，可以參考我們自己的 [SO101 從臂實作](https://github.com/huggingface/lerobot/blob/main/src/lerobot/robots/so_follower/so_follower.py)
 
 如果相容，請使用這些介面。否則，你需要找到或自行撰寫 Python 介面（本教學不涵蓋這部分）：
@@ -30,7 +30,7 @@
 
 不同型號可以共用同一條匯流排，例如 STS/SMS 與 SCS 伺服馬達，或 XL430 與 XL330：每個馬達都會透過自己所屬型號的定義來讀寫，包括位元組順序與正負號編碼。不同系列之間的差異來自同一組定義：哪個運作模式數值代表位置控制（`bus.set_operating_mode("position")`）、原點偏移（homing offset）是加到位置還是從位置減去，以及有哪些暫存器存在。
 
-支援某個型號並不代表所有校正輔助方法都能在它上面運作：Feetech SCS0009 既沒有運作模式，也沒有原點偏移，因此 `set_operating_mode()` 與 `set_half_turn_homings()` 會拒絕它。下面的校正流程適用於同時具備這兩者的伺服馬達，例如 STS；SCS 伺服馬達則只靠其活動範圍來校正。
+支援某個型號並不代表所有校正輔助方法（calibration helper）都能在它上面運作：Feetech SCS0009 既沒有運作模式，也沒有原點偏移，因此 `set_operating_mode()` 與 `set_half_turn_homings()` 會拒絕它。下面的校正流程適用於同時具備這兩者的伺服馬達，例如 STS；SCS 伺服馬達則只靠其活動範圍來校正。
 
 如果你使用的 Feetech 或 Dynamixel 伺服馬達不在這份清單中，請將它們加入 [rustypot](https://github.com/pollen-robotics/rustypot)，匯流排所讀取的控制表都保存在那裡：若某型號可共用現有的控制表，只需要註冊其型號編號；若是新型號，則需要提供伺服馬達定義（請參閱[伺服馬達貢獻指南](https://github.com/pollen-robotics/rustypot/blob/v1.13.1/src/servo/README.md)）。LeRobot 會從已安裝的 rustypot Python 套件讀取型號，因此該套件必須包含新型號：使用已包含它的 rustypot 發行版，或從原始碼建置 rustypot。
 
@@ -339,11 +339,11 @@ def send_action(self, action: dict[str, Any]) -> dict[str, Any]:
 
 ### 預測之間的等待[[waiting-between-predictions]]
 
-一般的本機 RTC 不需要新的機器人能力仍可使用。遠端 rollout、規劃的非同步語言暫停與可復原的動作供應不足，都需要一份保留目標等待契約。只有在透過 `send_action()` 更新每個動作欄位對控制器而言安全時，才使用 `supports_position_hold = True` 選擇啟用。通常這些欄位是實際的位置目標。控制器也可以改用一個經過個別驗證的保留命令來選擇啟用，例如 SONIC 的潛在動作 token，前提是重複送出它能讓板載控制器持續保持平衡。單靠啟用扭矩或 `.pos` 後綴並不能建立這項能力；速度／力矩與移動命令仍然不適合。
+一般的本機 RTC 不需要新的機器人能力仍可使用。遠端 rollout、規劃的非同步語言暫停與可復原的動作供應不足，都需要一份保留目標等待契約。請先確認透過 send_action() 反覆重送所有動作欄位不會對控制器造成問題，再設定 supports_position_hold = True 來啟用這項能力。通常這些欄位是實際的位置目標。控制器也可以改用一個經過個別驗證的保留命令來選擇啟用，例如 SONIC 的潛在動作 token，前提是重複送出它能讓板載控制器持續保持平衡。單靠啟用扭矩或 `.pos` 後綴並不能建立這項能力；速度／力矩與移動命令仍然不適合。
 
 共用的 rollout 實作會更新 `send_action()` 回傳的最後一個完整且有限值的動作，包括夾爪與任何驅動程式截斷。當你的驅動程式修改目標時，請回傳實際套用的目標，而不是原始請求。後續的觀測更新不會取代該目標。在任何命令被套用之前，會由一個經過驗證的量測位置快照初始化它。機器人可能會朝其保留目標移動並穩定下來；這份契約會停止軌跡推進，而不是保證立即的物理停止。請在硬體上針對每次部署驗證負載支援、夾持與命令更新行為。
 
-啟用保持時，自訂動作處理器與遙操作修正必須保留完整的位置命令，包括夾爪。驅動程式必須為每個動作元件回傳有限的實際套用值。不完整／無效的回傳在命令套用之後屬於契約失敗：rollout 會停止並抑制回歸原點，而不是重用較舊的目標。命令失敗在同步 rollout 中也會抑制回歸原點。
+當保持啟用時，自訂的動作處理器與遙操作修正必須保留完整的位置命令，包括夾爪。驅動程式必須為每個動作元件回傳有限的實際套用值。不完整／無效的回傳在命令套用之後屬於契約失敗：rollout 會停止並抑制回歸原點，而不是重用較舊的目標。命令失敗在同步 rollout 中也會抑制原點的回歸。
 
 遠端 rollout 會自動檢查這項驅動程式能力；不需要額外的保持模式命令列旗標。一般觀測失敗會走正常的 rollout 清理路徑。回到初始位置仍需要完整的觀測，而且如果相機持續無法使用，可能會失敗。
 
