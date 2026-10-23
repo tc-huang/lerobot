@@ -2,7 +2,7 @@
 
 LingBot-VLA 2.0 是 Robbyant 的視覺-語言-動作模型，也是 LingBot-VLA 1.0 的後繼者。它將
 Qwen3-VL-4B 骨幹網路與稀疏專家混合（Mixture-of-Experts）Qwen2 動作專家（32 個專家、top-4 路由）配對，並
-產生動作區塊（action chunk），並在 55 維標準狀態（state）與動作空間上使用流匹配，該空間由各具身形態共用。
+在各具身形態共用的 55 維標準狀態（state）／動作空間上，以流匹配（flow matching）產生動作區塊（action chunk）。
 
 LeRobot 移植版是 `lingbot_vla_v2` 策略（policy）。它使用標準 LeRobot 資料集、處理器、`lerobot-train`、
 `lerobot-eval` 與 `lerobot-rollout`，包括上游的雙查詢深度與影片蒸餾。
@@ -21,7 +21,7 @@ Qwen3-VL tokenizer 與影像處理器會從 `Qwen/Qwen3-VL-4B-Instruct`（`--pol
 
 ## 檢查點[[checkpoints]]
 
-| Checkpoint                        | Source                                             | Use                                                                                                                      |
+| 檢查點                            | 來源                                               | 用途                                                                                                                     |
 | --------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `lerobot/lingbot_vla_v2_base`     | `robbyant/lingbot-vla-v2-6b`，僅格式轉換           | 微調的起點。特徵為完整的 55 維標準佈局；請為你的機器人傳入槽位對應。                                                     |
 | `lerobot/lingbot_vla_v2_robotwin` | `robbyant/lingbot-vla-v2-6b-robotwin`，第 50000 步 | RoboTwin 2.0 評估。14 維狀態／動作，相機 `cam_high`、`cam_left_wrist`、`cam_right_wrist`，`QUANTILES`（q01/q99）正規化。 |
@@ -32,7 +32,7 @@ Qwen3-VL tokenizer 與影像處理器會從 `Qwen/Qwen3-VL-4B-Instruct`（`--pol
 
 模型會看到 55 維狀態，並預測 55 維動作。佈局由設定中的 `canonical_joints` 決定：
 
-| Slot                | Dims | Content        |
+| 槽位                | 維度 | 內容           |
 | ------------------- | ---- | -------------- |
 | `arm.position`      | 14   | 手臂關節位置   |
 | `end.position`      | 14   | 末端執行器姿態 |
@@ -64,7 +64,7 @@ Qwen3-VL tokenizer 與影像處理器會從 `Qwen/Qwen3-VL-4B-Instruct`（`--pol
   但名稱包含 `--policy.relative_exclude_joints` 項目的維度除外（預設 `["gripper"]`）。
 
 後處理器會反轉此對應，因此 `select_action` 會以機器人原始動作空間回傳動作。
-微調後的檢查點會將其槽位對應與資料集統計資料一併儲存在處理器中。
+微調後的檢查點會將其槽位對應與資料集統計量一併儲存在處理器中。
 
 ### 相機[[cameras]]
 
@@ -94,21 +94,21 @@ lerobot-train \
 ```
 
 將權重保持為 fp32，並以 bf16 計算（`--policy.dtype=float32 --accelerator.mixed_precision=bf16`），如同
-上游做法。使用 `--policy.dtype=bfloat16` 時，優化器會直接更新 bf16 權重，而大多數更新都太
+上游做法。使用 `--policy.dtype=bfloat16` 時，最佳化器會直接更新 bf16 權重，而大多數更新都太
 小，無法改變權重：在此資料集上，66% 的權重與基礎檢查點保持位元完全相同，且
 微調後的策略抖動明顯得多。推論時也請使用 fp32（這是以此方式訓練之檢查點的預設值）；
 bf16 推論會讓動作區塊明顯較不平順。
 
-正規化統計資料來自資料集。多 GPU 訓練使用標準 `torchrun` 啟動器，搭配
-`--parallelism.*` 與 `--accelerator.*` 旗標。fp32 權重、梯度與優化器狀態約佔
+正規化統計量來自資料集。多 GPU 訓練使用標準 `torchrun` 啟動器，搭配
+`--parallelism.*` 與 `--accelerator.*` 旗標。fp32 權重、梯度與最佳化器狀態約佔
 96 GB，因此當單一 GPU 太小時，請使用 `--parallelism.dp_shard=<num_gpus>` 進行分片。
 
 ### 雙查詢蒸餾[[dual-query-distillation]]
 
 LingBot-VLA 2.0 會在語言 token 之後附加學習到的查詢 token（目前與未來的深度／影片），且
 動作專家會關注這些 token。兩個檢查點都在 `align_params` 中帶有上游的配方，因此查詢
-token 在推論時一律會使用。訓練期間，小型頭部會讀取這些 token，並以
-凍結教師（LingBot-Depth 搭配 MoGe-2，以及 DINO-Video）蒸餾，使用上游的損失權重；額外損失會
+token 在推論時一律會使用。訓練期間，小型預測頭（head）會讀取這些 token，並以
+凍結的教師模型（LingBot-Depth 搭配 MoGe-2，以及 DINO-Video）蒸餾，使用上游的損失權重；額外損失會
 記錄為 `depth_loss`、`future_depth_loss`、`current_video_loss` 與 `future_video_loss`。
 
 教師會在第一次訓練步驟時下載（約 3 GB，來自 `robbyant/lingbot-vla-v2-6b` 與
@@ -118,7 +118,7 @@ token 在推論時一律會使用。訓練期間，小型頭部會讀取這些 t
 
 ### 關鍵訓練參數[[key-training-parameters]]
 
-| Parameter                               | Default                     | Description                                                     |
+| 參數                                    | 預設值                      | 說明                                                            |
 | --------------------------------------- | --------------------------- | --------------------------------------------------------------- |
 | `state_slots` / `action_slots`          | `null`                      | 原始跨度到標準槽位（請見上文）。                                |
 | `use_relative_actions`                  | `false`                     | 訓練相對於目前狀態的動作。                                      |
@@ -153,15 +153,15 @@ lerobot-eval \
   --rename_map='{"observation.images.head_camera": "observation.images.cam_high", "observation.images.left_camera": "observation.images.cam_left_wrist", "observation.images.right_camera": "observation.images.cam_right_wrist"}'
 ```
 
-50 個 RoboTwin 2.0 任務（每個 100 回合）的平均成功率，如下列來源所報告：
-[上游 README](https://github.com/Robbyant/lingbot-vla-v2) 中針對已發布 RoboTwin 檢查點（Muon
-後訓練於乾淨與隨機化資料，並以 FP32 推論、使用上游 RoboTwin 啟動器）。這些是
-上游數字，並非透過此移植版測得。
+下表為 50 個 RoboTwin 2.0 任務（每個任務 100 個回合）的平均成功率，取自
+[上游 README](https://github.com/Robbyant/lingbot-vla-v2) 中已發布 RoboTwin 檢查點的結果（以乾淨與隨機化資料、
+使用 Muon 最佳化器進行後訓練，並使用上游 RoboTwin 啟動器以 FP32 推論）。這些是
+上游的數字，並非透過此移植版測得。
 
-| Setting | π0.5   | LingBot-VLA 1.0 | LingBot-VLA 2.0 |
-| ------- | ------ | --------------- | --------------- |
-| 乾淨    | 82.74% | 88.56%          | **93.52%**      |
-| 隨機化  | 76.76% | 86.68%          | **92.80%**      |
+| 設定   | π0.5   | LingBot-VLA 1.0 | LingBot-VLA 2.0 |
+| ------ | ------ | --------------- | --------------- |
+| 乾淨   | 82.74% | 88.56%          | **93.52%**      |
+| 隨機化 | 76.76% | 86.68%          | **92.80%**      |
 
 ## 推論加速[[inference-speed-ups]]
 
@@ -176,7 +176,7 @@ lerobot-eval \
 
 一個 50 步動作區塊、10 個去噪步驟的耗時，使用 RoboTwin 檢查點與一張 RTX PRO 6000：
 
-| Flags                           | bf16    | fp32    |
+| 旗標                            | bf16    | fp32    |
 | ------------------------------- | ------- | ------- |
 | 無                              | ~756 ms | ~614 ms |
 | 全部三個 CUDA graph 旗標        | ~180 ms | ~203 ms |
@@ -218,7 +218,7 @@ lerobot-rollout \
 
 蒸餾訓練會下載三個凍結教師，各自遵循其授權（推論時永遠不會載入它們）：
 
-| Teacher       | Weights                                      | License                                                                           |
+| 教師模型      | 權重                                         | 授權                                                                              |
 | ------------- | -------------------------------------------- | --------------------------------------------------------------------------------- |
 | MoGe-2        | `Ruicheng/moge-2-vitb-normal`                | MIT                                                                               |
 | LingBot-Depth | `robbyant/lingbot-vla-v2-6b` (`depth/`)      | Apache-2.0                                                                        |

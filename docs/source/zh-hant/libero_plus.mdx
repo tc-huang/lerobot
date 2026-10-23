@@ -37,9 +37,9 @@ LIBERO-plus 會擾動 Spatial、Object、Goal 與 Long 套件中的 40 個原始
 這些數量來自上游的[任務登錄表](https://github.com/sylvestf/LIBERO-plus/blob/4976dc30028e805ff8094b55501d532c48fec182/libero/libero/benchmark/libero_suite_task_map.py)。四個受擾動的套件共包含 **10,030 個任務變體**；LIBERO-90 不計入這個總數。數量與任務索引取決於所安裝的 fork 修訂版本。
 
 <Tip warning={true}>
-  安裝 LIBERO-plus 會**取代**原本的 LIBERO——它會解除安裝 `hf-libero`， 使
-  `import libero` 指向 LIBERO-plus 這個 fork。你無法同時安裝兩者。
-  若要切換回原本的 LIBERO，請解除安裝這個 fork，並以 `pip install -e
+  安裝 LIBERO-plus 會**取代**原本的 LIBERO：它會解除安裝 `hf-libero`， 讓
+  `import libero` 指向 LIBERO-plus 這個 fork，因此兩者無法同時安裝。
+  若要切換回原本的 LIBERO，請解除安裝這個 fork， 再以 `pip install -e
   ".[libero]"` 重新安裝。
 </Tip>
 
@@ -66,7 +66,7 @@ LIBERO-plus 是從它的 GitHub fork 安裝，而不是透過 pyproject 的額�
 執行評估前，請先設定 MuJoCo 的渲染後端：
 
 ```bash
-export MUJOCO_GL=egl   # 無頭模式 / HPC / 雲端
+export MUJOCO_GL=egl   # 無頭模式／HPC／雲端
 ```
 
 </Tip>
@@ -164,9 +164,7 @@ LeRobot 預設會保留 LIBERO 的硬重設（hard reset）行為。啟用固定
 --env.init_states=true --env.hard_reset=false
 ```
 
-軟重設速度較快，但在環境的穩定步驟之後，與硬重設並非位元完全相同，
-因此相機觀測（observation）與策略結果可能略有差異。重現基準測試結果時，
-請使用硬重設。
+軟重設速度較快，但在環境的穩定步驟之後，結果與硬重設並非位元完全相同，因此相機觀測（observation）與策略的結果可能略有差異。重現基準測試結果時，請使用硬重設。
 
 ### 策略輸入與輸出[[policy-inputs-and-outputs]]
 
@@ -186,7 +184,7 @@ LeRobot 預設會保留 LIBERO 的硬重設（hard reset）行為。啟用固定
 
 400 個回合的計算方式（40 個原始任務 × 10 個回合）適用於原始 LIBERO，不適用於完整的 LIBERO-plus 評估。對 LIBERO-plus 而言，請從每個已註冊變體一個回合開始。重複執行同一個變體的回合，並不等同於對原始任務的不同變體進行取樣。
 
-若使用自訂子集，請使用這個 fork 的[任務分類](https://github.com/sylvestf/LIBERO-plus/blob/4976dc30028e805ff8094b55501d532c48fec182/libero/libero/benchmark/task_classification.json)來辨識擾動類別與難度等級。不要假設每個原始任務在每個擾動類別中都有十個不同的變體。回報結果時，請記錄 fork 版本、選取的套件名稱與任務索引、每個變體的回合數、隨機種子與重設設定。若要與已發表結果比較，請遵循此基準測試的取樣與彙總協定，而不是把任意子集視為等效。
+若使用自訂子集，請使用這個 fork 的[任務分類](https://github.com/sylvestf/LIBERO-plus/blob/4976dc30028e805ff8094b55501d532c48fec182/libero/libero/benchmark/task_classification.json)來辨識擾動類別與難度等級。不要假設每個原始任務在每個擾動類別中都有十個不同的變體。回報結果時，請記錄 fork 修訂版本、選取的套件名稱與任務索引、每個變體的回合數、隨機種子與重設設定。若要與已發表結果比較，請遵循此基準測試的取樣與彙總協定，而不是把任意子集視為等效。
 
 ## 訓練[[training]]
 

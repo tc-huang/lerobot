@@ -19,9 +19,9 @@ LeRobot 透過 `wall_oss_05` 策略類型（policy type）與
 ## 模型概覽[[model-overview]]
 
 Wall-OSS-0.5 以相機觀測（camera observations）、機器人狀態（robot state）
-及自然語言任務為條件來生成動作。策略會預測一個連續動作區塊
-使用流匹配。其視覺－語言專家也能產生文字，用於
-圖像描述、視覺問答、視覺定位與語言子任務。
+及自然語言任務為條件來生成動作。策略會使用流匹配預測一個連續動作區塊。
+其視覺－語言專家也能產生文字，用於
+影像描述（captioning）、視覺問答、視覺定位與語言子任務。
 
 此發布模型採用：
 
@@ -31,7 +31,7 @@ Wall-OSS-0.5 以相機觀測（camera observations）、機器人狀態（robot 
 - 10 步流取樣器；
 - 以 Qwen2.5-VL 處理視覺與語言輸入。
 
-基礎檢查點（checkpoint）用於在部署前於目標機器人與任務
+基礎檢查點用於在部署前於目標機器人與任務
 資料集上進行微調。
 
 ### LeRobot 整合涵蓋範圍[[what-the-lerobot-integration-covers]]
@@ -40,7 +40,7 @@ Wall-OSS-0.5 以相機觀測（camera observations）、機器人狀態（robot 
 - 原生 Qwen2.5-VL 視覺－語言處理與 Wall 動作專家。
 - 連續 x 預測流訓練與 10 步 Euler 取樣。
 - 由配方（recipe）驅動的文字交叉熵與文字／動作聯合微調。
-- 原生文字生成，用於 VQA、視覺定位、圖說與語言子任務。
+- 原生文字生成，用於 VQA、視覺定位、影像描述與語言子任務。
 - 透過 LeRobot 的互動式 rollout 直接生成文字。
 - 使用 LeRobot q01/q99 處理器的標準 26D 狀態與動作輸入。
 - 使用 `lerobot-train` 微調，並透過標準策略 API 進行推論。
@@ -73,7 +73,7 @@ uv sync --extra wall_oss_05
 | ------- | --------------------------------------------------------------------- | ------------------- |
 | 基礎 4B | [`lerobot/wall-oss-0.5`](https://huggingface.co/lerobot/wall-oss-0.5) | 標準 26D 微調與部署 |
 
-此檢查點（checkpoint）包含策略設定、Qwen 處理器與 tokenizer、
+此檢查點包含策略設定、Qwen 處理器與 tokenizer、
 模型權重、已儲存的 LeRobot 前／後處理器、正規化統計量，以及
 轉換中繼資料。這是基礎檢查點：請在目標機器人與任務上微調它，
 再回報任務層級結果。
@@ -86,7 +86,7 @@ uv sync --extra wall_oss_05
 --policy.type=wall_oss_05
 ```
 
-使用下列方式從 LeRobot 檢查點（checkpoint）初始化：
+使用下列方式從 LeRobot 檢查點初始化：
 
 ```bash
 --policy.path=lerobot/wall-oss-0.5
@@ -141,11 +141,11 @@ Wall-OSS-0.5 在內部使用標準 26D 狀態與動作配置。
 統計量正規化，然後補零至 26D 供模型使用。補零的動作維度會
 從訓練損失中排除。輸出會在反正規化前裁剪至資料集的動作
 寬度：8D 狀態搭配 7D 動作會回傳 7D 動作。
-`postprocess_action_dim` 可套用額外的輸出裁剪。填充不會
+`postprocess_action_dim` 可套用額外的輸出裁剪。補零不會
 重新對應關節座標或控制器慣例；請提供相容的值。
 
 使用 `camera_key_mapping` 設定影像輸入。此映射會將每個
-LeRobot 影像特徵關聯到一個 Wall 相機槽位。預設檢查點（checkpoint）使用
+LeRobot 影像特徵關聯到一個 Wall 相機槽位。預設檢查點使用
 `face_view` 與 `right_wrist_view`。
 
 資料集任務字串會作為語言指令傳遞給策略。
@@ -158,14 +158,14 @@ LeRobot 影像特徵關聯到一個 Wall 相機槽位。預設檢查點（checkp
 新檢查點一起儲存。
 
 已發布的檢查點使用原生 LeRobot 策略狀態字典與
-目前的 pre/postprocessor 格式。權重透過共用的
+目前的前／後處理器格式。權重透過共用的
 策略持久化程式碼載入與儲存，包括分散式 gather 與主行程
 寫入閘門。此設定會保留穩定的 tokenizer 資產參照，且可
 從任何工作目錄載入。
 
 ## 訓練[[training]]
 
-使用標準 LeRobot 訓練指令微調基礎檢查點（checkpoint）：
+使用標準 LeRobot 訓練指令微調基礎檢查點：
 
 ### 訓練指令範例[[training-command-example]]
 
@@ -223,8 +223,8 @@ lerobot-train \
 只有目標助理內容及其 `<|im_end|>` token 會用作
 語言標籤。使用者提示、填充、影像、本體感覺與連續
 動作查詢 token 會在文字交叉熵中被遮罩。沒有標註的資料列
-會保留原始的僅動作提示與損失。將 `use_language_recipe=false`
-設為停用標註渲染，或將 `recipe=null` 設為停用兩個配方渲染器。
+會保留原始的僅動作提示與損失。設定 `use_language_recipe=false`
+可停用標註渲染；設定 `recipe=null` 則會同時停用兩個配方渲染器。
 明確的 `recipe_path` 會覆寫內建配方。全新微調會從該配方
 與訓練統計量重建處理器；接續訓練與
 rollout 會還原檢查點已儲存的處理器與統計量。
@@ -235,32 +235,32 @@ YAML 覆寫；LeRobot 不提供共用的預設配方檔案。
 
 ## 關鍵設定參數[[key-configuration-parameters]]
 
-| 參數                      | 預設值                 | 說明                                          |
-| ------------------------- | ---------------------- | --------------------------------------------- |
-| `pretrained_name_or_path` | `lerobot/wall-oss-0.5` | Tokenizer 與影像處理器資產來源                |
-| `tokenizer_revision`      | `None`                 | 可選的基礎 tokenizer 固定版本，與權重修訂分開 |
-| `chunk_size`              | `32`                   | 每個區塊預測的動作數量                        |
-| `n_action_steps`          | `32`                   | 重新規劃前執行的預測動作數量                  |
-| `camera_key_mapping`      | 臉部與右腕視圖         | 將影像特徵鍵名關聯到模型相機槽位              |
-| `use_language_recipe`     | `true`                 | 啟用儲存在策略設定中的配方                    |
-| `recipe_path`             | `None`                 | 可選的明確外部配方覆寫                        |
-| `text_loss_weight`        | `0.1`                  | 受監督助理 token 交叉熵的權重                 |
-| `flow_loss_weight`        | `1.0`                  | 連續流動作損失的權重                          |
-| `tokenizer_max_length`    | `1000`                 | 聯合視覺－語言－動作 token 序列的最大長度     |
-| `device`                  | auto                   | Wall-OSS-0.5 請使用 `cuda`                    |
+| 參數                      | 預設值                 | 說明                                                |
+| ------------------------- | ---------------------- | --------------------------------------------------- |
+| `pretrained_name_or_path` | `lerobot/wall-oss-0.5` | Tokenizer 與影像處理器資產來源                      |
+| `tokenizer_revision`      | `None`                 | 可選的基礎 tokenizer 固定版本，與權重的修訂版本分開 |
+| `chunk_size`              | `32`                   | 每個區塊預測的動作數量                              |
+| `n_action_steps`          | `32`                   | 重新規劃前執行的預測動作數量                        |
+| `camera_key_mapping`      | 正面與右腕視角         | 將影像特徵鍵名關聯到模型相機槽位                    |
+| `use_language_recipe`     | `true`                 | 啟用儲存在策略設定中的配方                          |
+| `recipe_path`             | `None`                 | 可選的明確外部配方覆寫                              |
+| `text_loss_weight`        | `0.1`                  | 受監督助理 token 交叉熵的權重                       |
+| `flow_loss_weight`        | `1.0`                  | 連續流動作損失的權重                                |
+| `tokenizer_max_length`    | `1000`                 | 聯合視覺－語言－動作 token 序列的最大長度           |
+| `device`                  | auto                   | Wall-OSS-0.5 請使用 `cuda`                          |
 
 ## 評估與推論[[evaluation-and-inference]]
 
-將微調檢查點（checkpoint）的 Hub 儲存庫或本機目錄作為
+將微調檢查點的 Hub 儲存庫或本機目錄作為
 策略路徑傳入，即可搭配標準 LeRobot 評估或機器人
 rollout 工作流程使用。
 
-Wall-OSS-0.5 會使用其流取樣器生成連續動作區塊。目
-前策略支援連續流分支；自迴歸動作
+Wall-OSS-0.5 會使用其流取樣器生成連續動作區塊。
+目前策略支援連續流分支；自迴歸動作
 分支尚未公開。
 
 每個區塊會編碼其相機影像，並預填充觀測／文字前綴
-一次。十個 Euler 步驟會重複使用前綴鍵名與值，並只解碼
+一次。十個 Euler 步驟會重複使用前綴的 key 與 value（KV），並只解碼
 動作 token。每個新觀測都會重建快取。
 
 若使用支援的模擬器，請透過 `lerobot-eval` 提供微調檢查點與

@@ -242,7 +242,7 @@ def is_calibrated(self) -> bool:
 - 知道每個馬達的實際活動範圍，以便只在這個範圍內送出命令。
 - 將原始的馬達位置正規化為合理的連續值（例如百分比、角度），而不是依所用馬達而定、在其他地方無法重現的任意離散值。
 
-它應實作校正的邏輯（如果適用），並更新 `self.calibration` 字典。如果你使用的是 Feetech 或 Dynamixel 馬達，`SerialMotorsBus` 已經會手動執行校正：
+它應實作校正的邏輯（如果適用），並更新 `self.calibration` 字典。如果你使用的是 Feetech 或 Dynamixel 馬達，`SerialMotorsBus` 已內建手動校正流程：
 
 1. `_keep_calibration_file()` 會提供重用此 id 校正檔案的選項。如果你保留它，它會被寫入馬達，校正就在那裡結束。
 2. `record_calibration()` 會放開馬達，並將它們設為你指定的運作模式。

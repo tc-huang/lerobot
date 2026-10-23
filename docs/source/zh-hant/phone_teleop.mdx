@@ -4,7 +4,7 @@
 
 **在本指南中，你將學到：**
 
-- 如何連接 iOS/Android 手機
+- 如何連接 iOS／Android 手機
 - 手機的姿態（pose）如何對應到機器人末端執行器（end effector，EE）的目標
 - 如何調整安全限制、夾爪控制與 IK 設定
 
@@ -36,7 +36,7 @@ pip install lerobot[phone]
   - iOS：類比滑桿 `A3` 會以速度輸入控制夾爪——向上推可張開，向下拉可閉合，放開回到中央則保持不動。
   - Android：按鈕 `A` 與 `B` 的作用類似遞增／遞減（A 張開、B 閉合）。你可以在 `GripperVelocityToJoint` 步驟中調整速度。
 - 握法：用**雙手**握住手機，一根拇指放在啟用按鈕（`B1`）上，另一根放在夾爪滑桿（`A3`）上，這樣就能在不改變握法的情況下同時驅動手臂與夾爪。操作時讓手機保持平放——它的姿態就是命令，因此在動作途中重新握持會移動機器人。
-- 機器人起始姿態：`teleoperate.py` 會在啟動時（手機校正之前）將手臂移到它的[歸位姿態](./so101#calibrate)，並在按下 Ctrl+C 時移回腳本啟動時發現的位置。歸位會命令每個本體關節前往校正期間由 `set_half_turn_homings()` 置中的半轉值——也就是校正圖示中保持的姿態——而夾爪則留在原處，因此歸位絕不會讓它夾到東西。這一點很重要，因為目標是從你按下啟用按鈕時手臂所在的位置，以 IK 解算出來的——彎折或完全伸展的手臂可移動空間很少，會撞上關節限位。其他範例腳本（`record.py`、`evaluate.py`、`replay.py`）不會讓手臂歸位，因此請在啟動它們之前自行將手臂放到該位置。
+- 機器人起始姿態：`teleoperate.py` 會在啟動時（手機校正之前）將手臂移到它的[歸位姿態](./so101#calibrate)，並在按下 Ctrl+C 時移回腳本啟動時手臂原本所在的位置。歸位會命令每個手臂關節前往校正期間由 `set_half_turn_homings()` 置中的半圈值——也就是校正圖示中保持的姿態——而夾爪則留在原處，因此歸位絕不會讓它夾到東西。這一點很重要，因為目標是從你按下啟用按鈕時手臂所在的位置，以 IK 解算出來的——彎折或完全伸展的手臂可移動空間很少，會撞上關節限位。其他範例腳本（`record.py`、`evaluate.py`、`replay.py`）不會讓手臂歸位，因此請在啟動它們之前自行將手臂放到該位置。
 
 <img src="https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/lerobot/phone_teleop.webp" alt="Phone teleop orientation" title="Phone teleop orientation" width="40%">
 
@@ -71,7 +71,7 @@ teleop_device = Phone(teleop_config)
 
 <Tip warning={true}>
 
-**你必須提供機器人的 URDF。** 每個範例都會解算反向運動學（inverse kinematics），這需要手臂的運動學模型，而 LeRobot 並未隨附 URDF。
+**你必須提供機器人的 URDF**。每個範例都會解算反向運動學（inverse kinematics），這需要手臂的運動學模型，而 LeRobot 並未隨附 URDF。
 
 以本教學使用的 SO-100/SO-101 來說，請將 [SO-ARM100 儲存庫](https://github.com/TheRobotStudio/SO-ARM100/tree/main/Simulation/SO101)中的 `SO101` 資料夾複製到 `examples/phone_to_so100/`，
 這樣當你位於 LeRobot 儲存庫中時，檔案會落在 `examples/phone_to_so100/SO101/so101_new_calib.urdf`：
