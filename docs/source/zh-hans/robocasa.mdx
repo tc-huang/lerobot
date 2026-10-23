@@ -80,7 +80,7 @@ export MUJOCO_GL=egl  # 用于无头服务器（HPC、云）
 
 ## 评估[[evaluation]]
 
-下面所有评估代码片段都与 CI 命令一致（见 `.github/workflows/benchmark_tests.yml`）。`--rename_map` 参数将 RoboCasa 的原生相机键（`robot0_agentview_left` / `robot0_eye_in_hand` / `robot0_agentview_right`）映射到已发布 `smolvla_robocasa` 策略训练时所用的三相机（`camera1` / `camera2` / `camera3`）输入布局上。
+下面所有评估代码片段都与 CI 命令一致（见 `.github/workflows/benchmark_tests.yml`）。`--rename_map` 参数将 RoboCasa 的原生相机键映射到已发布 `smolvla_robocasa` 策略训练时所用的三相机（`camera1` / `camera2` / `camera3`）输入布局上：`robot0_agentview_left` → `camera1`，`robot0_agentview_right` → `camera2`，`robot0_eye_in_hand` → `camera3`。这一对应关系必须与策略训练时的映射一致（见检查点 `train_config.json` 中的 `rename_map`）；交换两个相机键会被静默接受，因为三个视角的形状相同。
 
 默认情况下，每个任务使用 RoboCasa 注册的 rollout 时长。设置 `--env.episode_length=<steps>` 可将相同的显式时长应用于每个选定的任务。
 
@@ -95,7 +95,7 @@ lerobot-eval \
   --eval.n_episodes=20 \
   --eval.use_async_envs=false \
   --policy.device=cuda \
-  '--rename_map={"observation.images.robot0_agentview_left": "observation.images.camera1", "observation.images.robot0_eye_in_hand": "observation.images.camera2", "observation.images.robot0_agentview_right": "observation.images.camera3"}'
+  '--rename_map={"observation.images.robot0_agentview_left": "observation.images.camera1", "observation.images.robot0_agentview_right": "observation.images.camera2", "observation.images.robot0_eye_in_hand": "observation.images.camera3"}'
 ```
 
 ### 多任务评估[[multi-task-evaluation]]
@@ -111,7 +111,7 @@ lerobot-eval \
   --eval.n_episodes=20 \
   --eval.use_async_envs=false \
   --policy.device=cuda \
-  '--rename_map={"observation.images.robot0_agentview_left": "observation.images.camera1", "observation.images.robot0_eye_in_hand": "observation.images.camera2", "observation.images.robot0_agentview_right": "observation.images.camera3"}'
+  '--rename_map={"observation.images.robot0_agentview_left": "observation.images.camera1", "observation.images.robot0_agentview_right": "observation.images.camera2", "observation.images.robot0_eye_in_hand": "observation.images.camera3"}'
 ```
 
 ### 基准组评估[[benchmark-group-evaluation]]
@@ -127,7 +127,7 @@ lerobot-eval \
   --eval.n_episodes=20 \
   --eval.use_async_envs=false \
   --policy.device=cuda \
-  '--rename_map={"observation.images.robot0_agentview_left": "observation.images.camera1", "observation.images.robot0_eye_in_hand": "observation.images.camera2", "observation.images.robot0_agentview_right": "observation.images.camera3"}'
+  '--rename_map={"observation.images.robot0_agentview_left": "observation.images.camera1", "observation.images.robot0_agentview_right": "observation.images.camera2", "observation.images.robot0_eye_in_hand": "observation.images.camera3"}'
 ```
 
 ### 推荐的评估片段数[[recommended-evaluation-episodes]]

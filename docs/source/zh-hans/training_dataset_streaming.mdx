@@ -56,14 +56,17 @@ worker，因此一个批量只会混合单一 worker 池中的片段。池越大
 **限制。** 字节预算（`streaming_byte_budget_gb`）与明确设置的 `video_decoder_cache_size`
 都是以 rank 为单位：每个 worker 分到其中的 1/N。每个 worker 至少需要一个片段，因此 `lerobot-train`
 使用的 worker 数最多等于该 rank 拥有的片段数。`--num_workers=0` 会让数据集留在
-训练进程中。
+训练进程中。在那里，训练线程会应用图像变换，因此相同的 `--seed`
+会产生相同的变换。
 
 ## MP4 sidecar 与第一次运行[[mp4-sidecars-and-the-first-run]]
 
 视频流式读取会使用 MP4 索引 sidecar。数据集初始化时会先检查
 以修订版本（revision）为键的本地缓存，再寻找有效的已发布 sidecar。若两者都没有，
 LeRobot 会在持有进程锁的情况下于本地创建 sidecar，并以原子方式安装它。
-创建失败或中断时，不会取代先前的有效文件。
+创建失败或中断时，不会取代先前的有效文件。其他需要同一 sidecar 的进程
+最多会等待该锁 `--dataset.streaming_sidecar_lock_timeout_s`（默认 30 分钟）。
+对于索引耗时较长的大型数据集，请调高该值。
 
 Hub 有效载荷（payload）的读取会固定在元数据快照的 commit。Bucket 索引会
 与最新的对象列表（包含内容哈希）进行比对，因此在相同
@@ -77,13 +80,23 @@ Hub 有效载荷（payload）的读取会固定在元数据快照的 commit。Bu
 节点本地缓存的集群上，第一个作业可能会在每个节点各创建一次。共用的 LeRobot 缓存可以避免这种
 重复。
 
-压缩的 v3 sidecar 会转换一次，成为只读的内存映射（memory-mapped）索引，位于
-`$HF_LEROBOT_HOME/streaming-indexes` 下。转换过程会上锁，并以原子方式发布；
-共用该缓存的 rank 会重复使用相同的文件支持的数组页面，而不是各自解压缩
-每个数组的私有副本。每个 rank 只会为其片段所使用的来源文件构建记录。
-衍生的索引需要容纳**未压缩样本表**的磁盘空间，但不会保存视频
-有效载荷。第一次转换会有成本；之后的打开会重复使用它。替换 sidecar
-会创建新一代的不可变映射索引，而不会使正在读取的读取器失效。
+Sidecar 构建会把每个已完成的来源索引写入一个临时归档。它最多
+保留配置数量的解析结果。数组内存取决于并发处理的最大来源数；
+归档元数据仍会随来源数量增长。运行 `lerobot-build-mp4-sidecar` 时，
+请使用 `--workers` 设置解析并发度。创建失败时会保留先前的 sidecar。
+
+已发布的 schema-3 NPZ 归档会保留规范的 `int64` 整数数组。第一次打开时，会
+将归档转换为 `$HF_LEROBOT_HOME/streaming-indexes` 下只读的内存映射（memory-mapped）索引。
+派生索引使用最小的精确整数类型。对于恒定的时长、组合
+偏移、大小或字节偏移，它只存储一次。只读数组视图会保留逻辑样本数。
+呈现时间戳（presentation timestamps）会保留精确的 `float64` 值。同步样本数组（sync-sample arrays）会保留密集存储。
+
+派生索引使用独立的缓存代际（cache generation）。较旧的读取器会保留其现有的缓存
+格式。使用新读取器进行的第一次打开可以转换归档一次；之后的打开会重复使用它。
+转换会使用进程锁与原子替换。共享该缓存的 rank 会重复使用
+相同的文件支持页面。每个 rank 只会为其片段所使用的来源文件构建记录。
+新旧缓存代际可能需要额外的磁盘空间。替换 sidecar 会创建
+一个新的不可变代际，而不会使正在读取的读取器失效。
 
 这并不会让所有元数据都维持固定大小：片段元数据与区间表仍会随着
 数据集增长，而打乱后的 rank 分片可能会碰到重叠的来源文件。常驻于操作系统的映射
@@ -133,6 +146,7 @@ MP4 编辑时间轴会被拒绝，而不是默默返回对齐错误的帧。
 | `video_decoder_cache_size`          | 池 × 相机数 | 每个 worker 打开的视频解码器 LRU 上限          |
 | `streaming_native_http_connections` |      未设置 | 每个 rank 的原生 HTTP 连接上限                 |
 | `streaming_native_http_subranges`   |           1 | 每次原生 HTTP 范围读取的并行子范围数           |
+| `streaming_sidecar_lock_timeout_s`  |        1800 | 等待另一个 sidecar 构建的秒数                  |
 | `max_num_shards`（`--num_workers`） |          16 | 每个 worker 并行获取的片段数                   |
 
 除了 `max_num_shards` 之外，所有选项都是 `--dataset.*` 参数。`max_num_shards` 是

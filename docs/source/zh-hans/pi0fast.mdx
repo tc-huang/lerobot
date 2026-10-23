@@ -118,6 +118,7 @@ lerobot-train \
 | `--policy.max_action_tokens`           | 每个动作块的最大 FAST token 数 | `256`                           |
 | `--policy.action_tokenizer_name`       | 要使用的 FAST 分词器           | `lerobot/fast-action-tokenizer` |
 | `--policy.compile_model=true`          | 启用 torch.compile 以加快训练  | `false`                         |
+| `--policy.optimizer_fused=true`        | 使用融合 AdamW；恢复训练时忽略 | `None`                          |
 
 ## 推理[[inference]]
 

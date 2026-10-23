@@ -24,20 +24,22 @@ LIBERO-plus 沿这些维度对每个原始 LIBERO 任务进行扰动，生成了
 
 ## 可用的任务套件[[available-task-suites]]
 
-LIBERO-plus 覆盖与 LIBERO 相同的五个套件：
+LIBERO-plus 对 Spatial、Object、Goal 和 Long 套件中的 40 个原始任务进行扰动。这四个套件中的每个注册任务都是扰动变体，而不是原始任务之一。该分支还保留了 LIBERO-90 中的 90 个未扰动任务。
 
-| 套件           | CLI 名称         | 任务数 | 最大步数 | 说明                             |
-| -------------- | ---------------- | ------ | -------- | -------------------------------- |
-| LIBERO-Spatial | `libero_spatial` | 10     | 280      | 需要对空间关系进行推理的任务     |
-| LIBERO-Object  | `libero_object`  | 10     | 280      | 以操作不同物体为核心的任务       |
-| LIBERO-Goal    | `libero_goal`    | 10     | 300      | 目标不断变化的目标条件任务       |
-| LIBERO-90      | `libero_90`      | 90     | 400      | 来自 LIBERO-100 集合的短时程任务 |
-| LIBERO-Long    | `libero_10`      | 10     | 520      | 来自 LIBERO-100 集合的长时程任务 |
+| 套件           | CLI 名称         | 原始任务数 | 注册任务数 | 最大步数 | 说明                             |
+| -------------- | ---------------- | ---------- | ---------- | -------- | -------------------------------- |
+| LIBERO-Spatial | `libero_spatial` | 10         | 2,402      | 280      | 需要对空间关系进行推理的任务     |
+| LIBERO-Object  | `libero_object`  | 10         | 2,518      | 280      | 以操作不同物体为核心的任务       |
+| LIBERO-Goal    | `libero_goal`    | 10         | 2,591      | 300      | 目标不断变化的目标条件任务       |
+| LIBERO-90      | `libero_90`      | 90         | 90         | 400      | 未扰动的短时程 LIBERO 任务       |
+| LIBERO-Long    | `libero_10`      | 10         | 2,519      | 520      | 来自 LIBERO-100 集合的长时程任务 |
+
+这些计数来自上游的[任务注册表](https://github.com/sylvestf/LIBERO-plus/blob/4976dc30028e805ff8094b55501d532c48fec182/libero/libero/benchmark/libero_suite_task_map.py)。四个扰动套件总共包含 **10,030 个任务变体**；LIBERO-90 不包含在该总数中。计数和任务索引取决于已安装的分支修订版本。
 
 <Tip warning={true}>
   安装 LIBERO-plus 会**替换**原版 LIBERO——它会卸载 `hf-libero`， 使 `import
-  libero` 解析到 LIBERO-plus 分支。两者无法同时安装。 若要切回原版
-  LIBERO，请卸载该分支并重新执行 `pip install -e ".[libero]"`。
+  libero` 解析到 LIBERO-plus 分支。两者无法同时 安装。若要切回原版
+  LIBERO，请卸载该分支 并使用 `pip install -e ".[libero]"` 重新安装。
 </Tip>
 
 ## 安装[[installation]]
@@ -82,7 +84,7 @@ python -c "import libero; print(libero.__file__)"
 
 ### 默认评估（推荐）[[default-evaluation-recommended]]
 
-在四个标准套件上进行评估（每个任务 10 个片段）：
+在四个扰动套件上评估每个注册变体，并按照[上游评估指南](https://github.com/sylvestf/LIBERO-plus#-evaluation)的建议，为每个变体使用一个片段：
 
 ```bash
 lerobot-eval \
@@ -90,9 +92,27 @@ lerobot-eval \
   --env.type=libero_plus \
   --env.task=libero_spatial,libero_object,libero_goal,libero_10 \
   --eval.batch_size=1 \
-  --eval.n_episodes=10 \
+  --eval.n_episodes=1 \
   --env.max_parallel_tasks=1
 ```
+
+对于上述注册表，这会运行 **10,030 个片段**。使用 `--eval.n_episodes=10` 时，同一命令会运行 **100,300 个片段**，而不是 400 个。
+
+### 冒烟测试[[smoke-test]]
+
+在启动完整评估之前，请使用一个注册变体和一个片段检查你的设置：
+
+```bash
+lerobot-eval \
+  --policy.path="your-policy-id" \
+  --env.type=libero_plus \
+  --env.task=libero_spatial \
+  --env.task_ids='[0]' \
+  --eval.batch_size=1 \
+  --eval.n_episodes=1
+```
+
+这是一次设置检查，而不是具有代表性的鲁棒性评估。
 
 ### 单套件评估[[single-suite-evaluation]]
 
@@ -104,17 +124,17 @@ lerobot-eval \
   --env.type=libero_plus \
   --env.task=libero_spatial \
   --eval.batch_size=1 \
-  --eval.n_episodes=10
+  --eval.n_episodes=1
 ```
 
 - `--env.task` 指定套件（`libero_spatial`、`libero_object` 等）。
-- `--env.task_ids` 限定为特定的任务索引（`[0]`、`[1,2,3]` 等）。省略则运行套件中的所有任务。
+- `--env.task_ids` 限定为注册任务索引（`[0]`、`[1,2,3]` 等），这些索引标识四个扰动套件中的变体。省略则运行所有注册任务。评估多个套件时，相同的索引列表会独立应用于每个套件。
 - `--eval.batch_size` 控制同时运行的环境数量。
-- `--eval.n_episodes` 设置每个任务运行的片段数。
+- `--eval.n_episodes` 设置每个注册任务运行的片段数。增大该值会重复评估所选变体；它不会额外选择不同的变体。
 
 ### 多套件评估[[multi-suite-evaluation]]
 
-传入以逗号分隔的列表，即可一次性在多个套件上对策略进行基准测试：
+通过传入以逗号分隔的列表，即可一次性在多个套件上对策略（policy）进行基准测试：
 
 ```bash
 lerobot-eval \
@@ -122,7 +142,7 @@ lerobot-eval \
   --env.type=libero_plus \
   --env.task=libero_spatial,libero_object \
   --eval.batch_size=1 \
-  --eval.n_episodes=10
+  --eval.n_episodes=1
 ```
 
 ### 控制模式[[control-mode]]
@@ -135,13 +155,17 @@ LIBERO-plus 支持两种控制模式——`relative`（默认）和 `absolute`�
 
 ### 重置性能[[reset-performance]]
 
-默认情况下，LeRobot 保留 LIBERO 的硬重置行为。在启用固定初始状态的前提下，你可以选择使用软重置，以跳过在每个片段重建仿真器模型和渲染器：
+默认情况下，LeRobot 保留 LIBERO 的硬重置行为。在启用固定初始
+状态的前提下，你可以选择使用软重置，以跳过在每个片段中重建仿真器
+模型和渲染器：
 
 ```bash
 --env.init_states=true --env.hard_reset=false
 ```
 
-软重置速度更快，但在环境完成稳定步骤之后与硬重置并非逐位一致，因此相机观测（observation）和策略（policy）结果可能会有细微差异。复现基准结果时请使用硬重置。
+软重置速度更快，但在环境完成稳定步骤后与硬重置并非逐位一致，
+因此相机观测（observation）和策略（policy）结果可能会有细微差异。
+复现基准结果时请使用硬重置。
 
 ### 策略输入与输出[[policy-inputs-and-outputs]]
 
@@ -155,9 +179,13 @@ LIBERO-plus 支持两种控制模式——`relative`（默认）和 `absolute`�
 
 - `Box(-1, 1, shape=(7,))` 中的连续控制——6 维末端执行器增量 + 1 维夹爪
 
-### 推荐的评估片段数[[recommended-evaluation-episodes]]
+### 评估工作量与可复现性[[evaluation-workload-and-reproducibility]]
 
-为保证基准测试可复现，请在全部四个标准套件（Spatial、Object、Goal、Long）上使用**每个任务 10 个片段**。这样总共得到 400 个片段，与已发表结果所用的方案一致。
+评估片段总数是**所有套件中所选注册任务的数量 × `--eval.n_episodes`**。例如，所有 Spatial 变体各运行一个片段会得到 2,402 个片段；在 Spatial 和 Object 中选择 `--env.task_ids='[0,1,2]'` 且各运行一个片段会得到六个片段。
+
+400 个片段的计算方式（40 个原始任务 × 10 个片段）适用于原版 LIBERO，而不是完整的 LIBERO-plus 评估。对于 LIBERO-plus，请从每个注册变体运行一个片段开始。对同一变体重复运行片段并不等同于采样原始任务的不同变体。
+
+对于自定义子集，请使用该分支的[任务分类](https://github.com/sylvestf/LIBERO-plus/blob/4976dc30028e805ff8094b55501d532c48fec182/libero/libero/benchmark/task_classification.json)来识别扰动类别和难度级别。不要假设每个原始任务在每个扰动类别中都有十个不同变体。报告结果时，请记录分支修订版本、所选套件名称和任务索引、每个变体的片段数、随机种子以及重置设置。要与已发表结果进行比较，请遵循该基准的采样和聚合协议，而不是将任意子集视为等价。
 
 ## 训练[[training]]
 
