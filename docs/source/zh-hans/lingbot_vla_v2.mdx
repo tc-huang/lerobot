@@ -1,0 +1,228 @@
+# LingBot-VLA 2.0[[lingbot-vla-20]]
+
+LingBot-VLA 2.0 是 Robbyant 的视觉-语言-动作模型（vision-language-action model），是 LingBot-VLA 1.0 的后继版本。它将
+Qwen3-VL-4B 主干与稀疏混合专家（Mixture-of-Experts）Qwen2 动作专家（action expert，包含 32 个专家、top-4 路由）配对，并
+通过流匹配（flow matching）在跨具身（embodiment）共享的 55-D 规范状态/动作空间（canonical state/action space）上生成动作块（action chunks）。
+
+LeRobot 移植版是 `lingbot_vla_v2` 策略（policy）。它使用标准 LeRobot 数据集、处理器、`lerobot-train`、
+`lerobot-eval` 和 `lerobot-rollout`，包括上游（upstream）的双查询深度与视频蒸馏。
+
+有关模型详情，请参见[上游仓库](https://github.com/Robbyant/lingbot-vla-v2)和
+[技术报告](https://arxiv.org/abs/2607.06403)。
+
+## 安装[[installation]]
+
+```bash
+pip install -e ".[training,lingbot_vla_v2]"
+```
+
+在构建处理器时，会从 `Qwen/Qwen3-VL-4B-Instruct`（`--policy.tokenizer_path`）加载 Qwen3-VL 分词器（tokenizer）
+和图像处理器（image processor）。不需要 `flash-attn`；注意力（attention）使用 PyTorch SDPA。
+
+## 检查点[[checkpoints]]
+
+| 检查点                            | 来源                                               | 用途                                                                                                                           |
+| --------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `lerobot/lingbot_vla_v2_base`     | `robbyant/lingbot-vla-v2-6b`，仅格式转换           | 微调起点。特征采用完整的 55-D 规范布局；请为你的机器人传入槽位映射（slot mappings）。                                          |
+| `lerobot/lingbot_vla_v2_robotwin` | `robbyant/lingbot-vla-v2-6b-robotwin`，第 50000 步 | RoboTwin 2.0 评估。14-D 状态/动作，相机为 `cam_high`、`cam_left_wrist`、`cam_right_wrist`，使用 `QUANTILES`（q01/q99）归一化。 |
+
+使用 `--policy.path` 加载任意一个；策略类型（policy type）从检查点（checkpoint）的 `config.json` 读取。
+
+## 将机器人映射到规范布局[[mapping-a-robot-onto-the-canonical-layout]]
+
+模型看到 55-D 状态并预测 55-D 动作。布局由配置中的 `canonical_joints` 设定：
+
+| 槽位                | 维度 | 内容           |
+| ------------------- | ---- | -------------- |
+| `arm.position`      | 14   | 臂关节位置     |
+| `end.position`      | 14   | 末端执行器位姿 |
+| `effector.position` | 2    | 夹爪位置       |
+| `hand.position`     | 12   | 灵巧手关节     |
+| `waist.position`    | 4    | 腰部关节       |
+| `head.position`     | 2    | 头部关节       |
+| `base.velocity`     | 3    | 移动底座速度   |
+| `reserved.slots`    | 4    | 预留           |
+
+`--policy.state_slots` 和 `--policy.action_slots` 会将数据集中 `observation.state` 和 `action` 的若干跨度（span）映射
+到这些槽位，格式为 JSON：
+
+```json
+{
+  "observation.state.arm.position": {
+    "origin_keys": [{ "observation.state": { "start": 0, "end": 5 } }]
+  }
+}
+```
+
+- 槽位名称就是上面的规范名称，可以选择添加 `observation.state.` 或 `action.` 前缀。未知
+  名称会报错。
+- 每个槽位从 `observation.state`（状态槽位）或 `action`（动作槽位）读取一个或多个 `{start, end}` 跨度。
+  跨度会拼接并从槽位起始处打包；剩余部分填零，并在
+  损失中排除。
+- 没有槽位映射时，原始特征会被当作 55-D 规范布局，与基础检查点相同。
+- 相对动作默认关闭。`--policy.use_relative_actions=true` 会从动作中减去当前状态，但不包括
+  名称中包含 `--policy.relative_exclude_joints` 条目的维度（默认 `["gripper"]`）。
+
+后处理器会反转该映射，因此 `select_action` 返回的是你机器人原始动作空间中的动作。
+微调后的检查点会随其处理器保存槽位映射和数据集统计信息。
+
+### 相机[[cameras]]
+
+图像步骤会按检查点 `input_features` 中列出的顺序读取相机。对于基础
+检查点，这些相机是 `camera_top`、`camera_wrist_left` 和 `camera_wrist_right`。将你的数据集相机通过
+`--rename_map` 映射到它们；你的机器人没有的视图会被屏蔽。
+
+## 微调[[fine-tuning]]
+
+以 [`maximellerbach/omx_multicubes`](https://huggingface.co/datasets/maximellerbach/omx_multicubes) 为例，这是
+一个单臂数据集，具有 5 个关节、一个夹爪和两个相机（`top`、`wrist`）：
+
+```bash
+lerobot-train \
+  --dataset.repo_id=maximellerbach/omx_multicubes \
+  --policy.path=lerobot/lingbot_vla_v2_base \
+  --policy.state_slots='{"observation.state.arm.position": {"origin_keys": [{"observation.state": {"start": 0, "end": 5}}]}, "observation.state.effector.position": {"origin_keys": [{"observation.state": {"start": 5, "end": 6}}]}}' \
+  --policy.action_slots='{"action.arm.position": {"origin_keys": [{"action": {"start": 0, "end": 5}}]}, "action.effector.position": {"origin_keys": [{"action": {"start": 5, "end": 6}}]}}' \
+  --rename_map='{"observation.images.top": "observation.images.camera_top", "observation.images.wrist": "observation.images.camera_wrist_left"}' \
+  --policy.dtype=float32 \
+  --accelerator.mixed_precision=bf16 \
+  --policy.repo_id=your_repo_id \
+  --batch_size=1 \
+  --steps=30000 \
+  --save_freq=5000 \
+  --output_dir=outputs/train/lingbot_vla_v2_omx
+```
+
+将权重保持为 fp32，并使用 bf16 计算（`--policy.dtype=float32 --accelerator.mixed_precision=bf16`），与
+上游（upstream）做法一致。使用 `--policy.dtype=bfloat16` 时，优化器会直接更新 bf16 权重，而大多数更新都太
+小，无法改变它们：在此数据集上，66% 的权重与基础检查点保持逐位相同，并且
+微调后的策略（policy）抖动明显更大。推理也应以 fp32 运行（这是以此方式训练的检查点的默认值）；
+bf16 推理会让动作块明显不够平滑。
+
+归一化统计量来自数据集。多 GPU 训练使用标准 `torchrun` 启动器，并配合
+`--parallelism.*` 和 `--accelerator.*` 标志。fp32 权重、梯度和优化器状态大约占用
+96 GB，因此当单个 GPU 太小时，请使用 `--parallelism.dp_shard=<num_gpus>` 对它们进行分片。
+
+### 双查询蒸馏[[dual-query-distillation]]
+
+LingBot-VLA 2.0 会在语言 token 之后追加学习到的查询 token（query token，当前和未来深度/视频），并且
+动作专家（action expert）会关注这些 token。两个检查点都在 `align_params` 中带有上游（upstream）的配方，因此查询
+token 在推理时始终会被使用。在训练期间，小型预测头会读取这些 token，并从
+冻结的教师模型（LingBot-Depth 搭配 MoGe-2，以及 DINO-Video）使用上游的损失权重进行蒸馏；额外损失会
+记录为 `depth_loss`、`future_depth_loss`、`current_video_loss` 和 `future_video_loss`。
+
+教师模型会在首次训练步骤时下载（约 3 GB，来自 `robbyant/lingbot-vla-v2-6b` 和
+`Ruicheng/moge-2-vitb-normal`），占用约 2 GB GPU 显存，并使每一步按每个样本增加约 130 ms。
+每个样本还会加载提前 `chunk_size - 1` 步的帧，这是未来目标所需要的。推理时不会额外
+运行任何内容。
+
+### 关键训练参数[[key-training-parameters]]
+
+| 参数                                    | 默认值                      | 描述                                                           |
+| --------------------------------------- | --------------------------- | -------------------------------------------------------------- |
+| `state_slots` / `action_slots`          | `null`                      | 从原始跨度到规范槽位的映射（见上文）。                         |
+| `use_relative_actions`                  | `false`                     | 训练相对于当前状态的动作。                                     |
+| `loss_type`                             | `L1_fm`                     | 对速度使用流匹配损失。                                         |
+| `normalization_mapping`                 | `MEAN_STD` 状态和动作       | RoboTwin 检查点使用 `QUANTILES`。                              |
+| `train_expert_only`                     | `false`                     | 冻结 Qwen3-VL 主干，仅训练动作专家。                           |
+| `freeze_vision_encoder`                 | `false`                     | 冻结视觉塔。                                                   |
+| `gradient_checkpointing`                | `false`                     | 在反向传播中重新计算激活，以节省内存但增加步进时间。           |
+| `use_moe_expert_lr`                     | `true`                      | 路由专家按 `lr * sqrt(num_experts / top_k)` 训练，与上游一致。 |
+| `optimizer_lr` / `scheduler_decay_lr`   | `1e-5` / `1e-5`             | AdamW 峰值学习率和最终学习率。                                 |
+| `resize_imgs_with_padding`              | `[256, 256]`                | 进入 Qwen3-VL 图像处理器前的帧尺寸，与上游一致。               |
+| `image_max_pixels` / `image_min_pixels` | `65536` / `65536`           | Qwen3-VL 像素预算：每个相机 64 个 token，与上游一致。          |
+| `chunk_size` / `n_action_steps`         | `50` / `50`                 | 预测时域以及每个块执行的动作数量。                             |
+| `num_steps`                             | `10`                        | 推理时的去噪步数。                                             |
+| `tokenizer_path`                        | `Qwen/Qwen3-VL-4B-Instruct` | Qwen3-VL 分词器和图像处理器。离线时使用本地路径。              |
+
+为了适配更小的 GPU，请将 `--policy.train_expert_only=true` 和 `--policy.gradient_checkpointing=true` 与较小的
+`--batch_size` 结合使用。
+
+## 评估[[evaluation]]
+
+在 LeRobot 的 RoboTwin 环境中评估 RoboTwin 检查点（设置参见 [RoboTwin](./robotwin)）。
+重命名映射会将环境相机名称与检查点对齐：
+
+```bash
+lerobot-eval \
+  --policy.path=lerobot/lingbot_vla_v2_robotwin \
+  --env.type=robotwin \
+  --env.task=beat_block_hammer \
+  --eval.batch_size=1 \
+  --eval.n_episodes=100 \
+  --rename_map='{"observation.images.head_camera": "observation.images.cam_high", "observation.images.left_camera": "observation.images.cam_left_wrist", "observation.images.right_camera": "observation.images.cam_right_wrist"}'
+```
+
+在 50 个 RoboTwin 2.0 任务（每个任务 100 个回合）上的平均成功率，如
+[上游（upstream）README](https://github.com/Robbyant/lingbot-vla-v2) 针对已发布的 RoboTwin 检查点所报告（在干净和随机化数据上
+使用 Muon 优化器进行后训练，使用上游 RoboTwin 启动器进行 FP32 推理）。这些是
+上游数字，并非通过此移植版测得。
+
+| 设置   | π0.5   | LingBot-VLA 1.0 | LingBot-VLA 2.0 |
+| ------ | ------ | --------------- | --------------- |
+| 干净   | 82.74% | 88.56%          | **93.52%**      |
+| 随机化 | 76.76% | 86.68%          | **92.80%**      |
+
+## 推理加速[[inference-speed-ups]]
+
+四个标志默认全部关闭，可加速 `select_action`。它们需要 CUDA 和固定输入形状，并且不需要额外
+依赖：
+
+- `--policy.use_cudagraph_denoise=true`：将去噪循环捕获为一个 CUDA graph。
+- `--policy.use_cudagraph_prefix=true`：捕获视觉语言前缀的 KV 填充。
+- `--policy.use_cudagraph_prefix_full=true`：还会在前缀图中捕获视觉塔。
+- `--policy.compile_predict_velocity=true`：对每步速度预测使用 `torch.compile`。首次调用
+  会编译约一分钟。
+
+一个 50 步动作块（action chunk）、10 个去噪步、RoboTwin 检查点、单张 RTX PRO 6000 的耗时：
+
+| 标志                                | bf16    | fp32    |
+| ----------------------------------- | ------- | ------- |
+| 无                                  | ~756 ms | ~614 ms |
+| 三个 CUDA graph 标志全部启用        | ~180 ms | ~203 ms |
+| 三个 CUDA graph 标志全部启用 + 编译 | ~120 ms | ~156 ms |
+
+在 bf16 下，CUDA graph 给出的输出与 eager 模式相同；`torch.compile` 会略微改变数值结果。
+
+## 部署[[deployment]]
+
+使用 `lerobot-rollout` 在机器人上运行微调后的检查点，并传入与训练时相同的 `--rename_map`：
+
+```bash
+lerobot-rollout \
+  --strategy.type=base \
+  --policy.path=outputs/train/lingbot_vla_v2_omx/checkpoints/last/pretrained_model \
+  --robot.type=<your_robot_type> \
+  --robot.port=<port> \
+  --task="pick up the cube" \
+  --fps=30 \
+  --device=cuda
+```
+
+实时分块（Real-Time Chunking）可通过 `--inference.type=rtc` 使用，与其他流匹配（flow matching）策略一样。
+
+## 引用[[citation]]
+
+```bibtex
+@article{lingbotvla2,
+      title={From Foundation to Application: Improving VLA Models in Practice},
+      author={Wei Wu and Fangjing Wang and Fan Lu and He Sun and Shi Liu and Yunnan Wang and Yibin Yan and Yong Wang and Shuailei Ma and Xinyang Wang and Yibin Liu and Shuai Yang and Tianxiang Zhou and Kejia Zhang and Lei Zhou and Cheng Su and Nan Xue and Bin Tan and Han Zhang and Youchao Zhang and Fei Liao and Xing Zhu and Yujun Shen and Kecheng Zheng},
+      journal={arXiv preprint arXiv:2607.06403},
+      year={2026}
+}
+```
+
+## 许可证[[license]]
+
+代码和转换后的检查点采用 Apache-2.0 许可证，与上游（upstream）LingBot-VLA 2.0 和 Qwen3-VL 发布版本一致。
+
+蒸馏训练会下载三个冻结的教师模型，它们受各自许可证约束（推理时从不加载它们）：
+
+| 教师模型      | 权重                                          | 许可证                                                                           |
+| ------------- | --------------------------------------------- | -------------------------------------------------------------------------------- |
+| MoGe-2        | `Ruicheng/moge-2-vitb-normal`                 | MIT                                                                              |
+| LingBot-Depth | `robbyant/lingbot-vla-v2-6b`（`depth/`）      | Apache-2.0                                                                       |
+| DINO-Video    | `robbyant/lingbot-vla-v2-6b`（`dino_video/`） | [DINOv3 许可证](https://github.com/facebookresearch/dinov3/blob/main/LICENSE.md) |
+
+DINO-Video 权重源自 Meta 的 DINOv3，因此使用蒸馏进行训练意味着要在
+DINOv3 许可证下使用它们；该许可证除其他条款外，要求你在出版物中致谢 DINOv3，并限制某些最终用途。

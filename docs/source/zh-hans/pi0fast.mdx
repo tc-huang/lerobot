@@ -109,15 +109,16 @@ lerobot-train \
 
 ### 关键训练参数[[key-training-parameters]]
 
-| 参数                                   | 描述                           | 默认值                          |
-| -------------------------------------- | ------------------------------ | ------------------------------- |
-| `--policy.gradient_checkpointing=true` | 训练期间显著减少内存占用       | `false`                         |
-| `--policy.dtype=bfloat16`              | 使用混合精度训练以提高效率     | `float32`                       |
-| `--policy.chunk_size`                  | 要预测的动作步数（动作视界）   | `50`                            |
-| `--policy.n_action_steps`              | 要执行的动作步数               | `50`                            |
-| `--policy.max_action_tokens`           | 每个动作块的最大 FAST token 数 | `256`                           |
-| `--policy.action_tokenizer_name`       | 要使用的 FAST 分词器           | `lerobot/fast-action-tokenizer` |
-| `--policy.compile_model=true`          | 启用 torch.compile 以加快训练  | `false`                         |
+| 参数                                   | 描述                             | 默认值                          |
+| -------------------------------------- | -------------------------------- | ------------------------------- |
+| `--policy.gradient_checkpointing=true` | 训练期间显著减少内存占用         | `false`                         |
+| `--policy.dtype=bfloat16`              | 使用混合精度训练以提高效率       | `float32`                       |
+| `--policy.chunk_size`                  | 要预测的动作步数（动作视界）     | `50`                            |
+| `--policy.n_action_steps`              | 要执行的动作步数                 | `50`                            |
+| `--policy.max_action_tokens`           | 每个动作块的最大 FAST token 数   | `256`                           |
+| `--policy.action_tokenizer_name`       | 要使用的 FAST 分词器             | `lerobot/fast-action-tokenizer` |
+| `--policy.compile_model=true`          | 启用 torch.compile 以加快训练    | `false`                         |
+| `--policy.optimizer_fused=true`        | 使用 fused AdamW；恢复训练时忽略 | `None`                          |
 
 ## 推理[[inference]]
 

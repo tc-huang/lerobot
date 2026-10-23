@@ -1,12 +1,53 @@
 # Unitree G1[[unitree-g1]]
 
-<img
-  src="https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/lerobot/unitree_thumbnail.jpg"
-  alt="Unitree G1 移动操作演示"
+<video
+  src="https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/lerobot/unitree_g1_passing_can.mp4"
+  autoplay
+  loop
+  muted
+  playsinline
   style={{ width: "100%" }}
 />
 
-LeRobot 现已支持 Unitree G1 人形机器人！你可以进行遥操作（teleoperation）、训练移动操作策略（policy）、在仿真中测试等。29 和 23 自由度（DoF）版本均受支持。
+LeRobot 支持 Unitree G1 人形机器人。你可以进行遥操作（teleoperation）、训练
+移动操作策略（policy）、在仿真中测试等。29 和 23 自由度（DoF）版本
+均受支持。
+
+## 具身（embodiment）选择[[embodiment-selection]]
+
+同一个 `UnitreeG1` 类通过 `UnitreeG1Config.embodiment` 选择其关节定义。
+默认值为 `g1_29`；因此现有配置保持 G1-29 的行为。要选择 23 自由度布局，
+可使用 `--robot.embodiment=g1_23` 或在 Python 中设置：
+
+```python
+from lerobot.robots.unitree_g1 import UnitreeG1Config
+
+config = UnitreeG1Config(embodiment="g1_23", is_simulation=False)
+```
+
+| 能力                    | G1-29                        | G1-23                                |
+| ----------------------- | ---------------------------- | ------------------------------------ |
+| 关节配置与动作/观测特征 | 29 个身体关节、14 个手臂关节 | 23 个身体关节、10 个手臂关节         |
+| DDS 命令/反馈布局       | 29 个活跃槽位                | 29 个槽位，缺失关节保持非活跃        |
+| MuJoCo 仿真             | 支持                         | 尚不支持；计划提供原生模型           |
+| 运动控制器              | GR00T 和 Holosoma            | GR00T 和 Holosoma                    |
+| SONIC 全身控制器        | 支持                         | 不支持；策略（policy）需要 29 自由度 |
+| 重力补偿                | 支持，默认关闭               | 尚不支持；计划提供原生运动学         |
+
+两种版本使用相同的 29 槽位 DDS 消息布局。G1-29 使用全部 29 个槽位，而
+G1-23 使用 23 个，并让六个不存在的关节槽位保持非活跃。因此，`kp`、`kd` 和
+`default_positions` 向量仍为 29 个元素长，并按 DDS 槽位索引。
+G1-23 的活跃手臂槽位为 `15..19` 和 `22..26`。槽位 `13, 14, 20, 21, 27, 28` 没有
+活跃关节；其配置值必须为零。它们会从动作/观测特征中省略，
+而不会重新编号。
+非活跃和保留的命令条目会在发布 G1-23 消息之前被清除。
+显式增益覆盖必须是有限的、非负的，并使用相同的稀疏布局。
+默认增益在两个版本之间按关节名称共享，因此相同的物理关节
+使用相同的增益，而 G1-23 中缺失的槽位保持为零。
+
+目前尚不支持原生 G1-23 MuJoCo 仿真。在启用仿真时选择 G1-23 具身
+会在传输初始化之前失败。原生 G1-23 MuJoCo 模型
+计划在未来版本中提供。
 
 ---
 

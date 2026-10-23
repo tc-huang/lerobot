@@ -242,34 +242,21 @@ def is_calibrated(self) -> bool:
 - 了解每个电机的物理运动范围，以便只在该范围内发送命令。
 - 将原始电机位置归一化为合理的连续值（例如百分比、角度），而不是依赖于所用特定电机、无法在其他设备上复现的任意离散值。
 
-它应实现校准逻辑（如适用），并更新 `self.calibration` 字典。如果你使用 Feetech 或 Dynamixel 电机，我们的总线接口已经包含有助于实现此功能的方法。
+它应实现校准逻辑（如适用），并更新 `self.calibration` 字典。如果你使用 Feetech 或 Dynamixel 电机，`SerialMotorsBus` 已经通过手动流程完成校准：
+
+1. `_keep_calibration_file()` 会提示复用此 ID 的校准文件。如果保留该文件，就会将其写入电机，校准也到此结束。
+2. `record_calibration()` 会释放电机，并将它们置于你指定的运行模式。
+3. 它会要求你将关节保持在运动范围的中间：该姿态会成为每个电机的半圈位置。
+4. 当你移动每个关节时，它会记录该关节的范围，直到你按 ENTER。会无限旋转的关节会放入 `full_turn_motors`，并改用完整的编码器范围；我们的 5 自由度机械臂没有这样的关节。
+5. `write_calibration()` 会将结果写入电机，`_save_calibration()` 会将其保存到校准文件。
 
 <!-- prettier-ignore-start -->
 ```python
 def calibrate(self) -> None:
-    self.bus.disable_torque()
-    for motor in self.bus.motors:
-        self.bus.set_operating_mode("position", motor)
+    if self._keep_calibration_file(self.bus):
+        return
 
-    input(f"Move {self} to the middle of its range of motion and press ENTER....")
-    homing_offsets = self.bus.set_half_turn_homings()
-
-    print(
-        "Move all joints sequentially through their entire ranges "
-        "of motion.\nRecording positions. Press ENTER to stop..."
-    )
-    range_mins, range_maxes = self.bus.record_ranges_of_motion()
-
-    self.calibration = {}
-    for motor, m in self.bus.motors.items():
-        self.calibration[motor] = MotorCalibration(
-            id=m.id,
-            drive_mode=0,
-            homing_offset=homing_offsets[motor],
-            range_min=range_mins[motor],
-            range_max=range_maxes[motor],
-        )
-
+    self.calibration = self.bus.record_calibration("position", full_turn_motors=[])
     self.bus.write_calibration(self.calibration)
     self._save_calibration()
     print("Calibration saved to", self.calibration_fpath)
