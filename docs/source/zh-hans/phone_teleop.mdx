@@ -36,7 +36,7 @@ pip install lerobot[phone]
   - iOS：模拟滑块 `A3` 以速度输入的形式控制夹爪——向上推打开，向下拉关闭，松开回到中间位置即保持。
   - Android：按钮 `A` 和 `B` 的作用类似于递增/递减（A 打开，B 关闭）。你可以在 `GripperVelocityToJoint` 步骤中调整速度。
 - 握持方式：用**双手**握住手机，一只拇指放在启用按钮（`B1`）上，另一只放在夹爪滑块（`A3`）上，这样你可以在不改变握姿的情况下同时驱动手臂和夹爪。操作时保持手机平放——它的位姿就是命令，因此在运动过程中重新握持手机会使机器人移动。
-- 机器人起始位姿：`teleoperate.py` 会在启动时（手机校准之前）将手臂移动到其[归位位姿（homing pose）](./so101#calibrate)，并在按下 Ctrl+C 时将其移回脚本启动时发现的位置。归位会向每个本体关节发送命令，使其到达校准期间 `set_half_turn_homings()` 所居中的半圈值——即校准图中保持的位姿——而夹爪则保持原位，因此归位永远不会让它夹到东西。这一点很重要，因为目标值是从你按下启用按钮时手臂所在的位置通过 IK 求解的——折叠或完全伸直的手臂几乎没有余量，会撞到关节限位。其他示例脚本（`record.py`、`evaluate.py`、`replay.py`）不会让手臂归位，因此在启动它们之前请自行将手臂放到该位置。
+- 机器人起始位姿：`teleoperate.py` 会在启动时（手机校准之前）将手臂移动到其[归位位姿（homing pose）](./so101#calibrate)，并在按下 Ctrl+C 时将其移回脚本启动时它所在的位置。归位会向每个本体关节发送命令，使其到达校准时 `set_half_turn_homings()` 作为中心的半圈值——即校准图中保持的位姿——而夹爪则保持原位，因此归位永远不会让它夹到东西。这一点很重要，因为目标值是从你按下启用按钮时手臂所在的位置通过 IK 求解的——折叠或完全伸直的手臂几乎没有余量，会撞到关节限位。其他示例脚本（`record.py`、`evaluate.py`、`replay.py`）不会让手臂归位，因此在启动它们之前请自行将手臂放到该位置。
 
 <img src="https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/lerobot/phone_teleop.webp" alt="手机遥操作方向" title="手机遥操作方向" width="40%">
 
@@ -71,7 +71,7 @@ teleop_device = Phone(teleop_config)
 
 <Tip warning={true}>
 
-**你必须提供机器人的 URDF。**每个示例都会求解逆运动学，这需要手臂的运动学模型，而 LeRobot 不附带该 URDF。
+**你必须提供机器人的 URDF**。每个示例都会求解逆运动学，这需要手臂的运动学模型，而 LeRobot 不附带该 URDF。
 
 对于本教程中使用的 SO-100/SO-101，请将 [SO-ARM100 仓库](https://github.com/TheRobotStudio/SO-ARM100/tree/main/Simulation/SO101)中的 `SO101` 文件夹复制到 `examples/phone_to_so100/`，
 这样当你位于 LeRobot 仓库中时，文件会落在 `examples/phone_to_so100/SO101/so101_new_calib.urdf`：
